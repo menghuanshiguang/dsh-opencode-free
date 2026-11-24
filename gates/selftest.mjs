@@ -245,12 +245,36 @@ const EXT_CASES = [
   {
     id: 'p3-token-in-history',
     gate: 'P3',
-    case: '历史里出现 token 形态（grep 数不该放过）',
+    case: '历史里出现真 token 形态（必零档必须红）',
     build(dir) {
-      const file = path.join(dir, 'log.bad.txt')
+      const log = path.join(dir, 'log.bad.txt')
+      const lic = path.join(dir, 'LICENSE.ok')
+      const repo = path.join(dir, 'repo.ok.json')
       // 运行时拼出来，不把任何真 token 形态落进仓库
-      fs.writeFileSync(file, `commit abc\n+const token = 'ghp_${'A'.repeat(36)}'\n`)
-      return ['--git-log', file]
+      fs.writeFileSync(log, `commit abc\n+const token = 'ghp_${'A'.repeat(36)}'\n`)
+      fs.writeFileSync(lic, 'MIT License\n\nCopyright (c) 2026 Ebony-Vinyl\n')
+      fs.writeFileSync(repo, JSON.stringify({ private: false, visibility: 'public' }))
+      return ['--license', lic, '--repo-json', repo, '--git-log', log]
+    },
+  },
+  {
+    id: 'p3-selfsource-passes',
+    gate: 'P3',
+    expect: 0,
+    case: '扫描器自身正则与合成负样例必须放行（门不该红错对象）',
+    build(dir) {
+      const log = path.join(dir, 'log.ok.txt')
+      const lic = path.join(dir, 'LICENSE.ok2')
+      const repo = path.join(dir, 'repo.ok2.json')
+      fs.writeFileSync(log, [
+        'commit abc',
+        "+const TOKEN_SHAPES = /ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}/g",
+        "+fs.writeFileSync(file, 'ghp_' + 'A'.repeat(36))",
+        '',
+      ].join('\n'))
+      fs.writeFileSync(lic, 'MIT License\n\nCopyright (c) 2026 Ebony-Vinyl\n')
+      fs.writeFileSync(repo, JSON.stringify({ private: false, visibility: 'public' }))
+      return ['--license', lic, '--repo-json', repo, '--git-log', log]
     },
   },
 ]
@@ -258,14 +282,21 @@ const EXT_CASES = [
 for (const c of (onlyCase ? EXT_CASES.filter(x => x.id === onlyCase) : EXT_CASES)) {
   const args = c.build(tmpDir)
   const r = runChecker(args)
+  const expect = c.expect ?? 1
+  // 反向档不能只看退出码：必须红在它该红的那个门上（否则是"红错对象"）
+  const rightGate = expect === 1 ? r.out.includes(`FAIL ${c.gate}`) : true
+  const ok = r.code === expect && rightGate
   results.push({
     id: c.id,
     gate: c.gate,
     case: c.case,
     command: `node gates/selftest.mjs --case ${c.id}`,
     exitCode: r.code,
-    ok: r.code === 1,
-    detail: r.code === 1 ? 'BLOCKED (exit 1)' : `NOT BLOCKED (exit ${r.code})`,
+    expect,
+    ok,
+    detail: ok
+      ? (expect === 1 ? `BLOCKED on FAIL ${c.gate} (exit 1)` : 'ALLOWED (exit 0)')
+      : `WRONG (exit ${r.code}, expect ${expect}, gate ${c.gate} ${rightGate ? 'red' : 'not red'})`,
     output: r.out.trim().split('\n').slice(0, 3),
   })
 }
@@ -273,7 +304,7 @@ for (const c of (onlyCase ? EXT_CASES.filter(x => x.id === onlyCase) : EXT_CASES
 const payload = {
   base: { exitCode: baseResult.code, ok: baseOk },
   cases: results,
-  negativeTests: results.filter(r => r.ok).map(r => ({ gate: r.gate, case: r.case, command: r.command, exitCode: r.exitCode })),
+  negativeTests: results.filter(r => r.ok && (r.expect ?? 1) === 1).map(r => ({ gate: r.gate, case: r.case, command: r.command, exitCode: r.exitCode })),
 }
 const allOk = baseOk && results.every(r => r.ok)
 
@@ -281,7 +312,11 @@ if (asJson) {
   console.log(JSON.stringify({ ...payload, allOk }, null, 2))
 } else {
   console.log(`base: ${baseOk ? 'PASS (exit 0)' : `FAIL (exit ${baseResult.code})`}`)
-  for (const r of results) console.log(`${r.ok ? 'BLOCKED ' : 'NOT-BLOCKED'} ${String(r.gate ?? '-').padEnd(3)} ${r.id.padEnd(20)} ${r.case ?? r.detail}`)
+  for (const r of results) {
+  const want = r.expect ?? 1
+  const label = want === 1 ? (r.ok ? 'BLOCKED ' : 'NOT-BLOCKED') : (r.ok ? 'ALLOWED ' : 'REJECTED')
+  console.log(`${label} ${String(r.gate ?? '-').padEnd(3)} ${r.id.padEnd(20)} ${r.case ?? r.detail}`)
+}
   console.log(`\n${results.filter(r => r.ok).length}/${results.length} 个坏输入被挡下；整体 ${allOk ? 'OK' : 'FAIL'}`)
   console.log(`\n可直接粘进 gates.json 的 negativeTests：`)
   console.log(JSON.stringify(payload.negativeTests, null, 2))

@@ -45,12 +45,64 @@ if (repoJsonPath) {
   if (repo) check('P2', repo.private === false && repo.visibility === 'public', `private=${repo.private} visibility=${repo.visibility}`)
 }
 
-// P3：历史里不能有 token 形态与带密码的 remote URL
+// P3：历史里不能有真 token，也不能有带密码的 remote URL。
+//
+// 两档判据（督查 2026-11-24 裁定）：
+//   必零：带长度限定的真 token 形态 0 命中（ghp_36 / github_pat_22+ / gho_36 / ghs_36 / ghu_36 / sk-20+）
+//   参考：裸前缀照数，但每一处必须给 文件:行 与归类；出现 unclassified（=可能是真值）即 FAIL。
+// 为什么要分档：裸前缀会把扫描器自己的正则和喂给它的合成负样例判成泄漏——那是门红错对象。
+const TOKEN_SHAPES = /ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|gho_[A-Za-z0-9]{36}|ghs_[A-Za-z0-9]{36}|ghu_[A-Za-z0-9]{36}|sk-[A-Za-z0-9]{20,}/g
+const BARE_PREFIX = /(?:ghp_|github_pat_|gho_|ghs_|ghu_|sk-)/g
+
+function classify(line, matchText) {
+  // 合成样例：源码里拼出来的假值，例如 'ghp_' + 'A'.repeat(36) 或 ${'A'.repeat(36)}
+  const at = line.indexOf(matchText)
+  const after = line.slice(at + matchText.length, at + matchText.length + 3)
+  if (after.startsWith('${') || /\.repeat\(/.test(line) || /'[A-Z]'\s*\+/.test(line)) return 'synthetic-sample'
+  // 扫描器自身：正则字面量或 grep 表达式
+  if (/log\.match\(|grep\s+-|new RegExp|[A-Za-z_]\s*=\s*\/[^/]*ghp_/.test(line)) return 'scanner-source'
+  return 'unclassified'
+}
+
+function scanHistory(log) {
+  const findings = []
+  let file = '(unknown)'
+  let lineNo = 0
+  for (const raw of log.split('\n')) {
+    if (raw.startsWith('+++ b/')) { file = raw.slice(6); continue }
+    if (raw.startsWith('+++ ')) { file = raw.slice(4); continue }
+    const hunk = raw.match(/^@@ -\d+(?:,\d+)? \+(\d+)/)
+    if (hunk) { lineNo = Number(hunk[1]); continue }
+    if (raw.startsWith('+') && !raw.startsWith('+++')) {
+      for (const shape of raw.match(TOKEN_SHAPES) ?? []) findings.push({ kind: 'token-shape', file, line: lineNo, shape })
+      for (const bare of raw.match(BARE_PREFIX) ?? []) findings.push({ kind: 'bare-prefix', file, line: lineNo, bare, class: classify(raw, bare) })
+      lineNo++
+    } else if (!raw.startsWith('-')) {
+      lineNo++
+    }
+  }
+  return findings
+}
+
 if (gitLogPath) {
   const log = fs.readFileSync(gitLogPath, 'utf8')
-  const tokens = log.match(/ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|gho_[A-Za-z0-9]{36}|sk-[A-Za-z0-9]{20,}/g) ?? []
+  const findings = scanHistory(log)
+  const tokenShapes = findings.filter(f => f.kind === 'token-shape')
   const creds = log.match(/https:\/\/[^/\s]+:[^@\s]+@/g) ?? []
-  check('P3', tokens.length === 0 && creds.length === 0, `tokenHits=${tokens.length} credUrlHits=${creds.length}`)
+  const bare = findings.filter(f => f.kind === 'bare-prefix')
+  const unclassified = bare.filter(f => f.class !== 'scanner-source' && f.class !== 'synthetic-sample')
+  const classified = bare.map(f => `${f.file}:${f.line} ${f.bare} ${f.class}`)
+  const hardOk = tokenShapes.length === 0 && creds.length === 0 && unclassified.length === 0
+  const detail = [
+    `tokenShapes=${tokenShapes.length}`,
+    `credUrlHits=${creds.length}`,
+    `barePrefix=${bare.length}`,
+    `unclassified=${unclassified.length}`,
+    ...(unclassified.length ? ['UNCLASSIFIED: ' + unclassified.map(f => `${f.file}:${f.line} ${f.bare}`).join(', ')] : []),
+    ...(classified.length ? ['(' + classified.join(' | ') + ')'] : []),
+    `commits=${(log.match(/^commit [0-9a-f]{40}$/gm) ?? []).length}`,
+  ].join(' ')
+  check('P3', hardOk, detail)
 }
 
 const skipped = [
