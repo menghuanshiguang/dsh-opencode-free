@@ -211,19 +211,30 @@ jobs:
         # is the script itself breaking — a missing path, a syntax error — and
         # must fail here, or a broken checker would keep this CI green.
         run: |
+          # The runner's shell is `bash -e`: a deliberate exit 1 would end the
+          # step before its code is read, so -e is switched off here and every
+          # outcome is decided below.
           set -uo pipefail
+          set +e
           node acceptance/year-clock-test.mjs --clock 2027-01-01 | tee year-clock-2027.txt
           rc=${PIPESTATUS[0]}
           case "$rc" in
             0|1) ;;
             *) echo "::error::year-clock exited $rc (crash, bad path or syntax) — that is FAIL"; exit 1 ;;
           esac
-          grep -q '渲染(2027) 含 2027' year-clock-2027.txt
+          grep -q '渲染(2027) 含 2027' year-clock-2027.txt || { echo "::error::the rendered-year line is missing — the template lost its run-time interpolation, which is a permanent FAIL"; exit 1; }
           echo "asset-consistency rc=$rc (1 = still frozen on the asset year, known until the product renders it)"
 
       - name: acceptance — the trigger surface is one key, parsed as YAML
         run: |
-          python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --user --quiet pyyaml
+          set -euo pipefail
+          # Ubuntu runners are externally-managed: `pip install --user` is refused
+          # there, so the fallback builds a throw-away venv instead.
+          if ! python3 -c 'import yaml' 2>/dev/null; then
+            python3 -m venv "$RUNNER_TEMP/venv"
+            "$RUNNER_TEMP/venv/bin/pip" install --quiet pyyaml
+            export PATH="$RUNNER_TEMP/venv/bin:$PATH"
+          fi
           python3 acceptance/verify-trigger-surface.py .github/workflows
 
       - name: acceptance — 13 rendered descriptions match the pinned sources
