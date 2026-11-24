@@ -55,6 +55,27 @@ v2.2.3 system prompt, the 13 tool contracts in the lane's wire order, the
 caller's JSON unchanged would be refused by the free tier (403 FreeTierError /
 429), which is why shaping is not optional.
 
+## Evidence has to be able to go red
+
+Every assertion this repository makes about a zero, an equality or a single
+request ships with a negative case that turns it red. Without one, a check that
+cannot fail is decoration, and the decoy looks exactly like the pass.
+
+The rule was written after three real ones were caught in this repository:
+
+| What it claimed | Why it could never fail | What makes it fail now |
+| --- | --- | --- |
+| "no off-loopback request was attempted" | the guard writes to **stderr**, the step teed only stdout, so the `grep` never saw the line | `2>&1` on the tee, plus a suite count that only counts the guard marker, and a deliberate outbound attempt in the fixtures |
+| "5 suites ran" | the counter matched `^=== `, which the suites print themselves as titles | the runner prints `### suite: <name>` and the counter matches only that |
+| "transport is the production Bun worker" | `transport=bun` was an inference from configuration, true with zero requests sent | gate 0.3 also requires `postCount>=1`, so a zero-request run fails it — the dry-run rehearsal (`45335463823`) exists to prove that |
+
+The same rule applies to the contract gate: `scripts/tests/gateway.test.mjs`
+asserts the routes that must not exist, `scripts/check-extraction.mjs` is proven
+against six bad inputs (an extra export, a `/stats` route, one changed byte in a
+verbatim file, an excluded path imported back, a commented-out route, an
+`if (false)` branch), and the offline count is demonstrated with a request that
+must be blocked.
+
 ## The extraction gate
 
 `node scripts/check-extraction.mjs` is the stage-2 gate, and it exits 0 only
