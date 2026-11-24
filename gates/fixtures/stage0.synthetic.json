@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 1,
+  "stage": "0",
+  "synthetic": true,
+  "run": {
+    "id": 1234567890,
+    "url": "https://github.com/menghuanshiguang/dsh-opencode-free/actions/runs/1234567890",
+    "workflow": "free-lane-live",
+    "event": "workflow_dispatch",
+    "conclusion": "success",
+    "attempt": 1,
+    "createdAt": "2026-11-24T05:00:00.000Z",
+    "headSha": "0123456789abcdef0123456789abcdef01234567",
+    "actor": "menghuanshiguang"
+  },
+  "repo": {
+    "fullName": "menghuanshiguang/dsh-opencode-free",
+    "visibility": "public",
+    "commit": {
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "branch": "main"
+    }
+  },
+  "env": {
+    "runner": "ubuntu-latest",
+    "runtime": "bun",
+    "bunVersion": "1.4.5",
+    "node": "20.19.0",
+    "transport": "bun",
+    "transportEvidence": "OUR_FREE_MODEL_FREE_TRANSPORT 未设 + bunVersion=1.4.5 + postCount=1（督查 2026-11-24 裁定：auto 模式缺 Bun 直接抛错，不回落 node）",
+    "transportOverride": false,
+    "os": "Linux",
+    "transportBasis": "derived"
+  },
+  "egress": {
+    "ip": "20.201.28.151",
+    "country": "US",
+    "asn": "AS8075",
+    "source": "ipinfo.io/json"
+  },
+  "request": {
+    "model": "nemotron-3.5-lightning-free",
+    "modelsFreeCount": 12,
+    "postCount": 1,
+    "retried": false,
+    "endpoint": "/inference/openai/v1/chat/completions",
+    "ua": "opencode/latest/2.2.3/cli"
+  },
+  "fingerprint": {
+    "toolCount": 13,
+    "toolOrder": [
+      "read",
+      "shell",
+      "edit",
+      "glob",
+      "grep",
+      "write",
+      "patch",
+      "webfetch",
+      "websearch",
+      "question",
+      "skill",
+      "subagent",
+      "todowrite"
+    ],
+    "toolsSha256": "6fb3aed805228cc69ca5e838b7af2fffa9bf57b8c27ebd7606fd94e41c05b77f",
+    "expectedToolsSha256": "6fb3aed805228cc69ca5e838b7af2fffa9bf57b8c27ebd7606fd94e41c05b77f",
+    "systemBytes": 2054,
+    "systemSha256": "e6a8390600000000000000000000000000000000000000000000000000000000",
+    "platform": "linux",
+    "shellDescPrefix": "Commands run on Linux using bash."
+  },
+  "response": {
+    "status": 200,
+    "ok": true,
+    "reply": "PONG",
+    "billingSource": "free",
+    "elapsedMs": 4731,
+    "chunks": 1,
+    "errorType": null
+  },
+  "assets": {
+    "tag": "v2.2.3",
+    "provenance": {
+      "blobMatch": 14,
+      "total": 14
+    },
+    "lockSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "contractsSha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "gates": [
+    {
+      "id": "P1",
+      "pass": true,
+      "evidence": "git show HEAD:LICENSE → 14289B，含 MIT 与 Ebony-Vinyl"
+    },
+    {
+      "id": "P2",
+      "pass": true,
+      "evidence": "API private:false（visibility=public）"
+    },
+    {
+      "id": "P3",
+      "pass": true,
+      "evidence": "git log -p --all 对 token 模式命中 0（翻公开后复跑）"
+    },
+    {
+      "id": "0.1",
+      "pass": true,
+      "evidence": "event=workflow_dispatch, confirm=true"
+    },
+    {
+      "id": "0.2",
+      "pass": true,
+      "evidence": "bun --version 输出在日志"
+    },
+    {
+      "id": "0.3",
+      "pass": true,
+      "evidence": "transport 由 bunFetch 路径打印，非推断"
+    },
+    {
+      "id": "0.4",
+      "pass": true,
+      "evidence": "egressIp/country 已打印"
+    },
+    {
+      "id": "0.5",
+      "pass": true,
+      "evidence": "status=200 ok=true reply=PONG"
+    },
+    {
+      "id": "0.6",
+      "pass": true,
+      "evidence": "billingSource=free"
+    },
+    {
+      "id": "0.7",
+      "pass": true,
+      "evidence": "postCount=1 retried=false"
+    },
+    {
+      "id": "0.8",
+      "pass": true,
+      "evidence": "toolsSha256 与 CI 同值 6fb3aed8…"
+    },
+    {
+      "id": "0.9",
+      "pass": true,
+      "evidence": "日志 artifact 留存 90 天"
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "live-log",
+      "kind": "log",
+      "url": "https://github.com/menghuanshiguang/dsh-opencode-free/actions/runs/1234567890",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "retentionDays": 90
+    }
+  ],
+  "verdict": {
+    "pass": true,
+    "failed": []
+  },
+  "negativeTests": [
+    {
+      "gate": "0.3",
+      "case": "零请求 run 把 transport 写成推断值 bun（bunVersion 有值但 transportSource=inferred）",
+      "command": "node gates/selftest.mjs --case transport-inferred",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.7",
+      "case": "postCount=2（第二发没被拦）",
+      "command": "node gates/selftest.mjs --case post-twice",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.8",
+      "case": "live 的 toolsSha256 与 CI 期望值不等（指纹环断了）",
+      "command": "node gates/selftest.mjs --case tools-hash-mismatch",
+      "exitCode": 1
+    }
+  ],
+  "producedBy": {
+    "bot": "总策划",
+    "at": "2026-11-24T05:05:00.000Z"
+  }
+}

@@ -58,6 +58,8 @@ jobs:
         run: |
           set -euo pipefail
           node tools/gates-selftest.mjs | tee gates-selftest.txt
+          node gates/selftest.mjs | tee gates-archive-selftest.txt
+          node gates/validate.mjs gates/fixtures/stage0.synthetic.json --stage 0 --allow-synthetic | tee gates-validate.txt
 
       - name: fingerprint baseline (normalised; lock if committed)
         run: |
@@ -99,6 +101,8 @@ jobs:
           path: |
             contract-check.txt
             gates-selftest.txt
+            gates-archive-selftest.txt
+            gates-validate.txt
             baseline.json
             suites.txt
           retention-days: 30

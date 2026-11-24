@@ -19,7 +19,7 @@ const readEnvFile = path => {
 }
 
 /** Build the gate record from already-parsed inputs. Pure; no filesystem reads. */
-export function buildGates({ fields = null, live = null, wire = { requests: 0, bodies: [] }, egress = {}, env = {} } = {}) {
+export function buildGates({ fields = null, live = null, wire = { requests: 0, bodies: [] }, egress = {}, env = {}, expectedToolsSha256 = null } = {}) {
   const checks = {}
   const check = (name, pass, detail) => { checks[name] = { pass: !!pass, ...(detail === undefined ? {} : { detail }) } }
   const bunVersion = env.GATES_BUN_VERSION ?? ''
@@ -41,7 +41,13 @@ export function buildGates({ fields = null, live = null, wire = { requests: 0, b
   check('0.6-billing-source', Boolean(live?.billingSource), live?.billingSource ?? null)
   check('0.7-single-request', wire.requests === 1, wire.requests)
   check('0.7-no-retry', (live?.retried ?? false) === false && wire.requests <= 1, live?.retried ?? false)
-  check('0.8-tools-sha256', typeof fields?.toolsSha256 === 'string' && fields.toolsSha256.length === 64, fields?.toolsSha256)
+  // 督查's ruling: 0.8 is a comparison, not a format check. The lock is validated by
+  // free-lane-ci on the same commit, so equality here is transitive evidence — and
+  // any 64-hex string no longer passes. The reverse fixture flips one digit.
+  check('0.8-tools-sha256',
+    typeof fields?.toolsSha256 === 'string' && fields.toolsSha256.length === 64
+      && expectedToolsSha256 !== null && fields.toolsSha256 === expectedToolsSha256,
+    `live=${fields?.toolsSha256 ?? '?'} lock=${expectedToolsSha256 ?? '(no lock)'}`)
   check('0.9-inputs-present', fields !== null && live !== null, { fields: fields !== null, live: live !== null })
 
   return {
@@ -68,7 +74,6 @@ export function buildGates({ fields = null, live = null, wire = { requests: 0, b
       transportDerived: true,
     },
     model: live?.model ?? fields?.model ?? null,
-    modelsFreeCount: 1,
     ok: live?.ok ?? null,
     status: live?.status ?? null,
     reply: live?.reply ?? null,
@@ -95,14 +100,15 @@ export function buildGates({ fields = null, live = null, wire = { requests: 0, b
 }
 
 /** Read the run's files off disk and build the record. */
-export function readGatesInputs({ fieldsPath, livePath, egressPath, wireDir }) {
+export function readGatesInputs({ fieldsPath, livePath, egressPath, wireDir, lockPath }) {
   const readJson = path => { try { return path && existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null } catch { return null } }
   let wire = { requests: 0, bodies: [] }
   if (wireDir && existsSync(join(wireDir, 'wire.jsonl'))) {
     const records = readFileSync(join(wireDir, 'wire.jsonl'), 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line))
     wire = { requests: records.filter(record => record.kind === 'request').length, bodies: records.filter(record => record.kind === 'response') }
   }
-  return { fields: readJson(fieldsPath), live: readJson(livePath), wire, egress: readEnvFile(egressPath), env: process.env }
+  const lock = readJson(lockPath)
+  return { fields: readJson(fieldsPath), live: readJson(livePath), wire, egress: readEnvFile(egressPath), env: process.env, expectedToolsSha256: lock?.toolsSha256 ?? null }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -110,6 +116,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const value = flag => { const at = args.indexOf(flag); return at >= 0 ? args[at + 1] : undefined }
   const gates = buildGates(readGatesInputs({
     fieldsPath: value('--fields'), livePath: value('--live'), egressPath: value('--egress'), wireDir: value('--wire'),
+    lockPath: value('--lock') ?? new URL('../docs/fingerprint-baseline.json', import.meta.url).pathname,
   }))
   const text = JSON.stringify(gates, null, 2)
   console.log(text)

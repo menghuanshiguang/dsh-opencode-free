@@ -1,0 +1,519 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://menghuanshiguang.github.io/dsh-opencode-free/gates.schema.json",
+  "title": "OFM 免费通道 · 阶段闸门记录 (gates.json)",
+  "description": "每个阶段一份，唯一数字源。数字只能从本文件或它所引用的 run artifact 原样检出；本文件之外写的数字不算证据。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "stage",
+    "run",
+    "repo",
+    "env",
+    "egress",
+    "request",
+    "fingerprint",
+    "response",
+    "assets",
+    "gates",
+    "artifacts",
+    "verdict",
+    "negativeTests",
+    "producedBy"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "stage": {
+      "enum": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    "synthetic": {
+      "type": "boolean",
+      "description": "合成样例（用假数字演示结构）。归档器默认拒绝 synthetic=true。"
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "url",
+        "workflow",
+        "event",
+        "conclusion",
+        "attempt",
+        "createdAt",
+        "headSha"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https://github\\.com/.+/actions/runs/[0-9]+$"
+        },
+        "workflow": {
+          "type": "string",
+          "minLength": 1
+        },
+        "event": {
+          "const": "workflow_dispatch"
+        },
+        "conclusion": {
+          "const": "success"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "headSha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "repo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fullName",
+        "visibility",
+        "commit"
+      ],
+      "properties": {
+        "fullName": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "visibility": {
+          "const": "public"
+        },
+        "commit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha",
+            "branch"
+          ],
+          "properties": {
+            "sha": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "branch": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "env": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runner",
+        "runtime",
+        "bunVersion",
+        "transport",
+        "transportOverride",
+        "transportBasis",
+        "transportEvidence"
+      ],
+      "properties": {
+        "runner": {
+          "const": "ubuntu-latest"
+        },
+        "runtime": {
+          "const": "bun"
+        },
+        "bunVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+"
+        },
+        "node": {
+          "type": "string"
+        },
+        "transport": {
+          "enum": [
+            "bun",
+            "node"
+          ]
+        },
+        "transportEvidence": {
+          "type": "string",
+          "minLength": 1,
+          "description": "哪一行日志证明实际走了 Bun worker（文件名/行号或日志定位）。"
+        },
+        "transportOverride": {
+          "type": "boolean",
+          "description": "true = 进程里设置过 OUR_FREE_MODEL_FREE_TRANSPORT。bun 生产的证据必须为 false。"
+        },
+        "os": {
+          "type": "string"
+        },
+        "transportBasis": {
+          "enum": [
+            "observed",
+            "derived"
+          ],
+          "description": "observed = 传输路径直接打印；derived = 由三个可观测事实推出（OUR_FREE_MODEL_FREE_TRANSPORT 未设 + bunVersion 非空 + postCount>=1，督查 2026-11-24 裁定）。两者都必须给 transportEvidence，derived 还要满足 postCount>=1。"
+        }
+      }
+    },
+    "egress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ip",
+        "country",
+        "source"
+      ],
+      "properties": {
+        "ip": {
+          "type": "string",
+          "minLength": 3
+        },
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$"
+        },
+        "asn": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "modelsFreeCount",
+        "postCount",
+        "retried",
+        "endpoint",
+        "ua"
+      ],
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modelsFreeCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "postCount": {
+          "const": 1
+        },
+        "retried": {
+          "const": false
+        },
+        "endpoint": {
+          "const": "/inference/openai/v1/chat/completions"
+        },
+        "ua": {
+          "const": "opencode/latest/2.2.3/cli"
+        }
+      }
+    },
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "toolCount",
+        "toolOrder",
+        "toolsSha256",
+        "expectedToolsSha256",
+        "systemBytes",
+        "systemSha256",
+        "platform",
+        "shellDescPrefix"
+      ],
+      "properties": {
+        "toolCount": {
+          "const": 13
+        },
+        "toolOrder": {
+          "const": [
+            "read",
+            "shell",
+            "edit",
+            "glob",
+            "grep",
+            "write",
+            "patch",
+            "webfetch",
+            "websearch",
+            "question",
+            "skill",
+            "subagent",
+            "todowrite"
+          ]
+        },
+        "toolsSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "实际发送的 tools 数组（含每条的 strict:false）的哈希，由 live 脚本打印。"
+        },
+        "expectedToolsSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "CI tool-contracts 作业从官方资产渲染出的同一串。必须与 toolsSha256 相等。"
+        },
+        "systemBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "systemSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "platform": {
+          "enum": [
+            "linux",
+            "darwin",
+            "win32"
+          ]
+        },
+        "shellDescPrefix": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "ok",
+        "reply",
+        "billingSource",
+        "elapsedMs"
+      ],
+      "properties": {
+        "status": {
+          "const": 200
+        },
+        "ok": {
+          "const": true
+        },
+        "reply": {
+          "const": "PONG"
+        },
+        "billingSource": {
+          "type": "string",
+          "minLength": 1
+        },
+        "elapsedMs": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "chunks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "errorType": {
+          "type": "null"
+        }
+      }
+    },
+    "assets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tag",
+        "provenance",
+        "lockSha256",
+        "contractsSha256"
+      ],
+      "properties": {
+        "tag": {
+          "const": "v2.2.3"
+        },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "blobMatch",
+            "total"
+          ],
+          "properties": {
+            "blobMatch": {
+              "const": 14
+            },
+            "total": {
+              "const": 14
+            }
+          }
+        },
+        "lockSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "contractsSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "pass",
+          "evidence"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^(P[1-3]|[0-5]\\.[0-9]+)$"
+          },
+          "pass": {
+            "const": true
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "kind",
+          "url",
+          "sha256",
+          "retentionDays"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "log",
+              "artifact"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "retentionDays": {
+            "type": "integer",
+            "minimum": 30
+          }
+        }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pass",
+        "failed"
+      ],
+      "properties": {
+        "pass": {
+          "const": true
+        },
+        "failed": {
+          "type": "array",
+          "maxItems": 0,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "negativeTests": {
+      "type": "array",
+      "minItems": 3,
+      "description": "每条闸门的反向测试：喂已知坏输入，必须非零退出。缺反向证据的闸门按未建成处理。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "gate",
+          "case",
+          "command",
+          "exitCode"
+        ],
+        "properties": {
+          "gate": {
+            "type": "string",
+            "pattern": "^(P[1-3]|[0-5]\\.[0-9]+)$"
+          },
+          "case": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "exitCode": {
+            "const": 1
+          }
+        }
+      }
+    },
+    "producedBy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bot",
+        "at"
+      ],
+      "properties": {
+        "bot": {
+          "type": "string",
+          "minLength": 1
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

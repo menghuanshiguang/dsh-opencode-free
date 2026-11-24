@@ -10,7 +10,12 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { assetDir } from './upstream.mjs'
+import { assetDir, load } from './upstream.mjs'
+
+// The wire order is the lane's own declaration order and the `shell` description
+// is rendered per platform; comparing against the raw asset's key order or its
+// unfilled template reports a deviation that is not there.
+const { V2_OFFICIAL_TOOL_ORDER, v2ShellDescription } = await load('src/o2a/official-tools.js')
 
 const args = process.argv.slice(2)
 const valueOf = flag => { const at = args.indexOf(flag); return at >= 0 ? args[at + 1] : undefined }
@@ -55,6 +60,9 @@ if (requests.length === 1) {
   const prompt = (sent.messages ?? []).find(message => message?.role === 'system' || message?.role === 'developer')?.content ?? ''
   const promptText = typeof prompt === 'string' ? prompt : JSON.stringify(prompt)
   const envBlock = promptText.match(/<env>([\s\S]*?)<\/env>/)?.[1]?.replace(/\s+/g, ' ').trim() ?? ''
+  // The `shell` description is rendered for the platform in the body itself, so
+  // the report renders it for that platform — not for the machine reading the log.
+  const wirePlatform = /Platform: (\w+)/.exec(envBlock)?.[1] ?? process.platform
 
   console.log(`\n=== request actually sent (${requests[0].bytes} bytes, sha256 ${requests[0].sha256}) ===`)
   console.log(`model: ${sent.model}`)
@@ -64,7 +72,7 @@ if (requests.length === 1) {
 
   const assetNames = Object.keys(contracts)
   check(tools.length === 13, '13 tools on the wire', String(tools.length))
-  check(tools.map(tool => tool?.function?.name).join(',') === assetNames.join(','), 'tool order equals the pinned asset order')
+  check(tools.map(tool => tool?.function?.name).join(',') === V2_OFFICIAL_TOOL_ORDER.join(','), 'wire order is the lane’s official order', tools.map(tool => tool?.function?.name).join(','))
 
   console.log(`\n=== tool contracts on the wire ===`)
   for (const name of assetNames) {
@@ -72,7 +80,8 @@ if (requests.length === 1) {
     const asset = contracts[name]
     const descSha = sha(fn?.description ?? '')
     const schemaSha = sha(canon(fn?.parameters))
-    const ok = fn?.description === asset.description && canon(fn?.parameters) === canon(asset.parameters)
+    const expectedDescription = name === 'shell' ? v2ShellDescription(asset.description, wirePlatform) : asset.description
+    const ok = fn?.description === expectedDescription && canon(fn?.parameters) === canon(asset.parameters)
     console.log(`     ${name.padEnd(11)} desc ${descSha.slice(0, 16)}  schema ${schemaSha.slice(0, 16)}  ${ok ? 'identical' : 'DIFFERS'}`)
     check(ok, `${name}: wire description and schema are the pinned asset`)
   }
