@@ -1,0 +1,162 @@
+name: free-lane-ci
+
+# Offline only. This workflow must never spend the free lane's quota, so it runs
+# with a network guard that refuses every off-loopback request made by a test
+# process. The asset refresh is the one exception, and it talks to
+# raw.githubusercontent.com — never to the inference host.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: free-lane-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UPSTREAM_REPO: Ebony-Vinyl/dsh-our-free-model
+  UPSTREAM_SHA: f29116baea55483ff067c1816966f1d08d8f0981
+  FREE_MODEL: nemotron-3.5-lightning-free
+
+jobs:
+  tool-contracts:
+    name: tool-contracts (byte-for-byte fingerprint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM_REPO }}
+          ref: ${{ env.UPSTREAM_SHA }}
+          path: upstream
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: assert the upstream checkout is the pinned commit
+        run: |
+          set -euo pipefail
+          head=$(git -C upstream rev-parse HEAD)
+          echo "upstream HEAD: $head"
+          test "$head" = "$UPSTREAM_SHA"
+
+      - name: contract check (13 tool contracts + system prompt)
+        run: |
+          set -euo pipefail
+          node tools/contract-check.mjs "$FREE_MODEL" | tee contract-check.txt
+
+      - name: fingerprint baseline (normalised; lock if committed)
+        run: |
+          set -uo pipefail
+          node tools/fingerprint-baseline.mjs "$FREE_MODEL" > baseline.json
+          cat baseline.json
+          set +e
+          node tools/fingerprint-baseline.mjs "$FREE_MODEL" --assert
+          status=$?
+          set -e
+          if [ "$status" -eq 2 ]; then
+            echo "::warning::no docs/fingerprint-baseline.json yet — this run publishes the baseline, it is not evidence"
+          elif [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+
+      - name: upstream offline suites (network guard on)
+        run: |
+          set -euo pipefail
+          cd upstream
+          for suite in fingerprint-test opencode-parity-test free-lane-wire-test free-lane-compat-test free-lane-quota-test; do
+            echo "=== $suite ==="
+            node --import "$GITHUB_WORKSPACE/tools/guard-offline.mjs" "scripts/$suite.mjs"
+          done | tee "$GITHUB_WORKSPACE/suites.txt"
+
+      - name: assert no inference request was attempted
+        run: |
+          set -euo pipefail
+          if grep -q 'BLOCKED' suites.txt; then
+            echo "::error::a suite tried to leave loopback — the guard stopped it, fix the suite"
+            exit 1
+          fi
+          grep -c 'no off-loopback request was attempted' suites.txt || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tool-contracts
+          path: |
+            contract-check.txt
+            baseline.json
+            suites.txt
+          retention-days: 30
+
+  assets:
+    name: assets (anonymous source + rebuild)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM_REPO }}
+          ref: ${{ env.UPSTREAM_SHA }}
+          path: upstream
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # The pinned fetcher reads through `gh api`, which needs a token. This repo
+      # carries none, so `gh` on PATH is an anonymous shim that reads
+      # raw.githubusercontent.com and computes the git blob SHA itself.
+      - name: install the anonymous gh shim
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bin"
+          cp tools/gh-anon-shim.mjs "$RUNNER_TEMP/bin/gh"
+          chmod +x "$RUNNER_TEMP/bin/gh"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: fetch the pinned sources anonymously
+        run: |
+          set -euo pipefail
+          export OFM_ASSET_LOG="$RUNNER_TEMP/asset-log.jsonl"
+          cd upstream
+          node scripts/fetch-opencode-assets.mjs --force
+
+      - name: documented blob SHAs must match
+        env:
+          OFM_ASSET_LOG: ${{ runner.temp }}/asset-log.jsonl
+        run: |
+          set -euo pipefail
+          node tools/asset-lock.mjs --write "$RUNNER_TEMP/opencode-assets.lock.json" | tee asset-lock.txt
+
+      - name: rebuild the assets and require a clean tree
+        run: |
+          set -euo pipefail
+          cd upstream
+          node scripts/build-o2a-assets.mjs
+          git diff --stat
+          git diff --exit-code -- src/o2a/assets
+          echo "assets rebuilt byte-identically from the anonymous sources"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: assets
+          path: |
+            asset-lock.txt
+            ${{ runner.temp }}/opencode-assets.lock.json
+            ${{ runner.temp }}/asset-log.jsonl
+          retention-days: 30

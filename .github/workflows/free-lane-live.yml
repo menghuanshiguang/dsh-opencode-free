@@ -1,0 +1,173 @@
+name: free-lane-live
+
+# The only entry point that spends the upstream free quota.
+# The trigger surface is deliberately a single key: nothing else may reach this
+# workflow (gate 0.1, and 验收员's adversarial check E1/E2).
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'One free model id (no commas, no spaces)'
+        required: true
+        default: nemotron-3.5-lightning-free
+        type: string
+      confirm:
+        description: 'Type true to send exactly one live request'
+        required: true
+        default: 'false'
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+# Queues, never cancels: the second dispatch has to be refused by the preflight
+# step, not silently run later (constraint 3).
+concurrency:
+  group: free-lane-live
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: Ebony-Vinyl/dsh-our-free-model
+  UPSTREAM_SHA: f29116baea55483ff067c1816966f1d08d8f0981
+
+jobs:
+  live:
+    name: live (${{ inputs.model }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: preflight — inputs
+        run: |
+          set -euo pipefail
+          model='${{ inputs.model }}'
+          confirm='${{ inputs.confirm }}'
+          echo "model=$model"
+          echo "confirm=$confirm"
+          [ "$confirm" = 'true' ] || { echo "::error::confirm must be exactly true"; exit 1; }
+          case "$model" in
+            *[[:space:],]*) echo "::error::exactly one model per run"; exit 1 ;;
+          esac
+          printf '%s' "$model" | grep -Eq '^[a-z0-9][a-z0-9.-]*-free$' || { echo "::error::model is not a free-lane id"; exit 1; }
+
+      - name: preflight — refuse a second live run
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/free-lane-live.yml/runs?per_page=100"
+          curl -sS -H "Authorization: Bearer $GITHUB_TOKEN" -H 'Accept: application/vnd.github+json' "$api" > "$RUNNER_TEMP/runs.json"
+          jq -r '.workflow_runs[] | "\(.id) \(.status) \(.conclusion // "-") \(.created_at)"' "$RUNNER_TEMP/runs.json" | head -20
+          busy=$(jq --arg id "$GITHUB_RUN_ID" '[.workflow_runs[] | select((.id|tostring) != $id) | select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "requested" or .status == "pending")] | length' "$RUNNER_TEMP/runs.json")
+          # A queued second dispatch only starts after the first finishes, so the
+          # busy check alone cannot see it. A cooldown on completed runs is what
+          # actually refuses it (and it also protects the upstream quota window).
+          recent=$(jq --arg id "$GITHUB_RUN_ID" --argjson now "$(date -u +%s)" '[.workflow_runs[] | select((.id|tostring) != $id) | select(.status == "completed") | select((.updated_at | fromdateiso8601) > ($now - 900))] | length' "$RUNNER_TEMP/runs.json")
+          echo "preflight: other_busy=$busy recent_completed=$recent (cooldown 900s)"
+          if [ "$busy" -gt 0 ]; then
+            echo "::error::refused — another live run is already queued or running"
+            exit 1
+          fi
+          if [ "$recent" -gt 0 ]; then
+            echo "::error::refused — a live run completed less than 15 minutes ago (single-shot discipline)"
+            exit 1
+          fi
+          echo "preflight: no other live run in flight"
+
+      - name: egress (recorded before any request)
+        run: |
+          set -euo pipefail
+          trace=$(curl -sS --max-time 15 'https://www.cloudflare.com/cdn-cgi/trace' || true)
+          ip=$(printf '%s\n' "$trace" | sed -n 's/^ip=//p')
+          country=$(printf '%s\n' "$trace" | sed -n 's/^loc=//p')
+          colo=$(printf '%s\n' "$trace" | sed -n 's/^colo=//p')
+          echo "egressIp=$ip"
+          echo "country=$country"
+          echo "colo=$colo"
+          printf 'egressIp=%s\ncountry=%s\ncolo=%s\n' "$ip" "$country" "$colo" > "$RUNNER_TEMP/egress.env"
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM_REPO }}
+          ref: ${{ env.UPSTREAM_SHA }}
+          path: upstream
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: transport must be the production Bun worker
+        run: |
+          set -euo pipefail
+          bun --version | tee bun-version.txt
+          echo "OUR_FREE_MODEL_BUN=$(command -v bun)" >> "$GITHUB_ENV"
+          test -z "${OUR_FREE_MODEL_FREE_TRANSPORT:-}" || { echo "::error::OUR_FREE_MODEL_FREE_TRANSPORT must stay unset"; exit 1; }
+          test -x "$(command -v bun)"
+
+      - name: fingerprint fields (same cwd as the live call)
+        run: |
+          set -euo pipefail
+          cd upstream
+          node ../tools/fingerprint-fields.mjs "${{ inputs.model }}" "$RUNNER_TEMP/fields.json"
+
+      - name: fingerprint baseline must match the committed lock
+        run: |
+          set -uo pipefail
+          cd upstream
+          node ../tools/fingerprint-baseline.mjs "${{ inputs.model }}" --assert
+          status=$?
+          if [ "$status" -eq 2 ]; then
+            echo "::error::no docs/fingerprint-baseline.json — this run publishes the baseline and stops BEFORE spending quota; commit it, then dispatch again"
+            node ../tools/fingerprint-baseline.mjs "${{ inputs.model }}" > "$RUNNER_TEMP/baseline.json"
+            exit 1
+          fi
+          exit "$status"
+
+      - name: live request (one model, one request, no retry)
+        env:
+          OFM_WIRE_DIR: ${{ runner.temp }}/wire
+        run: |
+          set -euo pipefail
+          cd upstream
+          node --import "$GITHUB_WORKSPACE/tools/capture-wire.mjs" \
+            scripts/oc-free-live-test.mjs --live --model "${{ inputs.model }}" \
+            | tee "$RUNNER_TEMP/live.json"
+
+      - name: report the wire capture
+        if: always()
+        run: |
+          set -uo pipefail
+          node tools/report-wire.mjs --dir "$RUNNER_TEMP/wire" --expect "$RUNNER_TEMP/fields.json" | tee "$RUNNER_TEMP/wire-report.txt"
+
+      - name: gates.json
+        if: always()
+        run: |
+          set -uo pipefail
+          node tools/gates.mjs \
+            --fields "$RUNNER_TEMP/fields.json" \
+            --live "$RUNNER_TEMP/live.json" \
+            --egress "$RUNNER_TEMP/egress.env" \
+            --wire "$RUNNER_TEMP/wire" \
+            --out "$RUNNER_TEMP/gates.json" | tee "$RUNNER_TEMP/gates.txt"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/live.json
+            ${{ runner.temp }}/fields.json
+            ${{ runner.temp }}/wire-report.txt
+            ${{ runner.temp }}/gates.json
+            ${{ runner.temp }}/gates.txt
+            ${{ runner.temp }}/egress.env
+            ${{ runner.temp }}/wire/**
+            bun-version.txt
+          retention-days: 30

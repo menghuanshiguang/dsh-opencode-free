@@ -1,0 +1,3 @@
+# Upstream reference checkout — CI checks it out at the pinned SHA. No trailing
+# slash: the pattern must also cover a stray file or symlink named "upstream".
+/upstream
