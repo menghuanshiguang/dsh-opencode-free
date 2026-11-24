@@ -127,15 +127,20 @@
 
 ## 5. 工具往返（阶段 3 的核心判据）
 
-- **C19 出站**：调用方 `tools[]`（OpenAI 形状）经 `applyFingerprint` 改名后上行，
-  线上 `tools[].function.name` 必须是 13 个官方契约名之一；参数 schema 逐字节取自契约
-  （`docs/opencode-assets.lock.json` 那 13 份）。`applyFingerprint` 返回的 `ToolRenameMap` 是
-  唯一合法的名字映射来源。
+- **C19 出站**：`applyFingerprint` 之后，出站 `tools[]` 必须**带齐** 13 个官方工具，定义逐字节取自
+  `docs/opencode-assets.lock.json` 那 13 份；**13 个官方名是保留的**，调用方工具不得以官方名上行。
+  调用方工具走别名：`mcp_<12 位 hex>`（线上永不出现调用方的拼写）。两条路径都要：调用方声明的是
+  非官方名 → 直接改别名；调用方声明的是官方名（`read`/`write`…）但定义与官方那份不同 → 同样先改别名，
+  官方那份再按契约补上（`carriesOfficialDefinition` 为真时才不重复）。别名不得等于任何官方名。
+  `applyFingerprint` 返回的 `ToolRenameMap` 是唯一合法的映射来源；出站字节仍受 I1 约束。
 - **C20 入站还原**：上游返回的每个工具名——`delta.tool_calls[].function.name`、
   `message.tool_calls[].function.name`、以及 legacy `function_call.name`——都要经
-  `restoreToolName(name, renames)` 还原成**调用方那一侧的名字**，逐字节相等；不在映射里的名字原样透传。
-  非流式与流式两条路径各要一条测试：调用方声明 `my_read`（映射到线上 `read`），上游回 `read`，
-  客户端必须看到 `my_read`。
+  `restoreToolName(name, renames)` 还原成**调用方那一侧的拼写**，逐字节相等；不在映射里的名字
+  （含官方名）原样透传，不得凭空改名。流式与非流式各要一条测试，两条都必须可实现：
+  ① 调用方声明 `read`、定义与官方不同 → 线上 `mcp_3316348dbadf` → 客户端看到 `read`；
+  ② 调用方声明 `my_read` → 线上 `mcp_<另 12 位>` → 客户端看到 `my_read`。
+  **不可实现的方向不作为判据**：官方名不会“映射到”调用方工具，`read` 永远不会是发给调用方工具的线上名
+  （这里是 2026-11-24 按实现事实的更正——初版写反了）。
 
 ## 6. 合约测试与离线纪律
 
@@ -162,4 +167,5 @@ C1 405 带 allow 头 · C2 models 只列免费 · C3 条目字段 · C4 `x-free-
 C5 413 · C6 非免费本地 400 零出站 · C7 content 拼接 · C8 tool_calls 聚合 · C9 model 原样 ·
 C10 usage 兜底 · C11 SSE 分帧与 `[DONE]` · C12 chunk 形状与 model · C13 首帧 role 与工具分片 ·
 C14 include_usage · C15 断流错误帧 · C16 本地错误形状 · C17 429 retry-after · C18 不出 500 ·
-C19 出站改名 · C20 入站还原（流式+非流式各一条）。
+C19 出站：13 官方齐备 + 调用方工具走 `mcp_<hex>` 别名 · C20 入站还原（别名 → 调用方拼写；
+官方名与未映射名原样透传；流式+非流式各一条）。
