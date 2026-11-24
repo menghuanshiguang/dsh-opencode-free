@@ -248,9 +248,12 @@ const zipRequests = state => {
   if (mangled && !ok) {
     unjudged = 'seal 在线档：本机 bash 替身把 `-o`+`-w` 之后的位置参数截成空串（URL 变空），这一档本机不可判；CI 上按真 bash 判'
   } else if (!ok) failures.push(`封存（列表 [${ARCHIVE_NAME}, ${LIVE_NAME}]）rc=${r.code} zip请求=${JSON.stringify(zips)} 绑定=${bound} validate=${validated}——必须只下 live 那一件、只绑 live 那一件：${tail6(r.out)}\nserved:\n${existsSync(join(state, 'served.log')) ? readFileSync(join(state, 'served.log'), 'utf8') : '(none)'}\nargv:\n${existsSync(join(state, 'args.log')) ? readFileSync(join(state, 'args.log'), 'utf8') : '(none)'}`)
-  say(ok, 'seal-picks-live', mangled && !ok
-    ? `UNJUDGED rc=${r.code}：本机 shell 截断 curl 参数（URL 空），不是脚本的判据`
-    : `rc=${r.code} zip=${zips.map(u => u.split('/').slice(-2)[0]).join(',') || 'none'} 绑定=${bound} validate=${validated ? 'pass' : 'FAIL'}`)
+  // 判不了就不能印 FAIL：CI 日志里有人按 FAIL 抓红，把这个环境缺陷打成「脚本红了」是另一次误账。
+  if (mangled && !ok) {
+    console.log(`UNJ   ${'seal-picks-live'.padEnd(22)} rc=${r.code}：本机 shell 把 curl 的 -o/-w 之后的位置参数截成空串（URL 空），这一档本机不可判，CI 上判`)
+  } else {
+    say(ok, 'seal-picks-live', `rc=${r.code} zip=${zips.map(u => u.split('/').slice(-2)[0]).join(',') || 'none'} 绑定=${bound} validate=${validated ? 'pass' : 'FAIL'}`)
+  }
 }
 
 // ⑤ 列表里只剩 archive-<runid> → 必须拒，点名 live-<runid>，且一个 zip 都不许下
