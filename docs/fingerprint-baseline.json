@@ -1,0 +1,39 @@
+{
+  "note": "Generated on ubuntu-latest by tools/fingerprint-baseline.mjs (CI run 45332305427, sha a88a5fd). Committed as the runner baseline; CI now asserts against it instead of computing its own expectation.",
+  "model": "nemotron-3.5-lightning-free",
+  "platform": "linux",
+  "clientVersion": "2.2.3",
+  "userAgent": "opencode/latest/2.2.3/cli",
+  "endpoint": "/inference/openai/v1/chat/completions",
+  "bodyKeys": [
+    "max_completion_tokens",
+    "messages",
+    "model",
+    "stream",
+    "stream_options",
+    "tools"
+  ],
+  "toolCount": 13,
+  "toolNames": [
+    "edit",
+    "glob",
+    "grep",
+    "patch",
+    "question",
+    "read",
+    "shell",
+    "skill",
+    "subagent",
+    "todowrite",
+    "webfetch",
+    "websearch",
+    "write"
+  ],
+  "toolsSha256": "6fb3aed805228cc69ca5e838b7af2fffa9bf57b8c27ebd7606fd94e41c05b77f",
+  "normalisedSystemPrompt": {
+    "bytes": 2007,
+    "sha256": "24f1d1d475e1abc4e43ecd22d9caa7f27397bdce5d091247c4e8551a2565f2e7"
+  },
+  "rawSystemPromptBytes": 2104,
+  "shellDescriptionPrefix": "Commands run on Linux using bash."
+}

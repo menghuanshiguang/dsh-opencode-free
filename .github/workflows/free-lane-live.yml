@@ -45,6 +45,7 @@ jobs:
           echo "model=$model"
           echo "confirm=$confirm"
           [ "$confirm" = 'true' ] || { echo "::error::confirm must be exactly true"; exit 1; }
+          echo "GATES_CONFIRM=$confirm" >> "$GITHUB_ENV"
           case "$model" in
             *[[:space:],]*) echo "::error::exactly one model per run"; exit 1 ;;
           esac
@@ -107,6 +108,7 @@ jobs:
         run: |
           set -euo pipefail
           bun --version | tee bun-version.txt
+          echo "GATES_BUN_VERSION=$(bun --version)" >> "$GITHUB_ENV"
           echo "OUR_FREE_MODEL_BUN=$(command -v bun)" >> "$GITHUB_ENV"
           test -z "${OUR_FREE_MODEL_FREE_TRANSPORT:-}" || { echo "::error::OUR_FREE_MODEL_FREE_TRANSPORT must stay unset"; exit 1; }
           test -x "$(command -v bun)"
@@ -164,6 +166,7 @@ jobs:
           path: |
             ${{ runner.temp }}/live.json
             ${{ runner.temp }}/fields.json
+            ${{ runner.temp }}/baseline.json
             ${{ runner.temp }}/wire-report.txt
             ${{ runner.temp }}/gates.json
             ${{ runner.temp }}/gates.txt

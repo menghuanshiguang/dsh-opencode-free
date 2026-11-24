@@ -27,7 +27,7 @@ const { CLIENT_UA, V2_CLIENT_VERSION } = await load('src/o2a/version.js')
 const args = process.argv.slice(2)
 const flags = args.filter(arg => arg.startsWith('--'))
 const model = args.find(arg => !arg.startsWith('--')) ?? 'nemotron-3.5-lightning-free'
-const lockPath = fileURLToPath(new URL('../../docs/fingerprint-baseline.json', import.meta.url))
+const lockPath = fileURLToPath(new URL('../docs/fingerprint-baseline.json', import.meta.url))
 
 const sha = value => createHash('sha256').update(value).digest('hex')
 const canon = value => {
