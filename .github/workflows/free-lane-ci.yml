@@ -60,6 +60,11 @@ jobs:
           node tools/gates-selftest.mjs | tee gates-selftest.txt
           node gates/selftest.mjs | tee gates-archive-selftest.txt
           node gates/validate.mjs gates/fixtures/stage0.synthetic.json --stage 0 --allow-synthetic | tee gates-validate.txt
+          # The archived records must stay valid against the lock, not only the fixture.
+          for f in gates/stage0/*.json; do
+            [ "$(basename "$f")" = index.json ] && continue
+            node gates/validate.mjs "$f" --stage 0 --lock docs/fingerprint-baseline.json | tee -a gates-archive-validate.txt
+          done
 
       - name: fingerprint baseline (normalised; lock if committed)
         run: |
@@ -103,6 +108,7 @@ jobs:
             gates-selftest.txt
             gates-archive-selftest.txt
             gates-validate.txt
+            gates-archive-validate.txt
             baseline.json
             suites.txt
           retention-days: 30
