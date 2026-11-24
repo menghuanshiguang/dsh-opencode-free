@@ -243,6 +243,23 @@ jobs:
       - name: npm run typecheck
         run: npm run typecheck
 
+      - name: gateway contract (the verifier's bench, under the guard)
+        run: |
+          set -uo pipefail
+          G="$GITHUB_WORKSPACE/tools/guard-offline.mjs"
+          NODE_OPTIONS="--import $G" node acceptance/gateway-contract.mjs 2>&1 | tee gateway-contract.txt
+          bench=${PIPESTATUS[0]}
+          # The bench counts its own attempts and reports "0 outside loopback".
+          # That zero is only worth something if the guard was in the process, so
+          # the guard's own line has to be in the same artifact; without it the
+          # run fails even when the bench says PASS.
+          if ! grep -q '^\[guard-offline\] no off-loopback request was attempted' gateway-contract.txt; then
+            echo "::error::the guard never reported from the bench process — a PASS without it does not show the bench stayed offline"
+            exit 1
+          fi
+          echo "OFFLINE REQUESTS: $(grep -c '^\[guard-offline\] BLOCKED' gateway-contract.txt || true) blocked; guard armed"
+          exit "$bench"
+
       - name: contract tests, with every off-loopback request refused
         # The guard is a preload that throws on any off-loopback fetch and on any
         # attempt to start the Bun worker. NODE_OPTIONS carries it into the child
@@ -318,6 +335,7 @@ jobs:
           path: |
             extraction.txt
             newline-policy.txt
+            gateway-contract.txt
             year-clock-today.txt
             year-clock-2027.txt
           retention-days: 30
