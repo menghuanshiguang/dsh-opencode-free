@@ -59,8 +59,9 @@ const baseArgs = [SCRIPT, '--dir', art, '--out', out,
 // 1) 正例：全输入 → rc 0 且产物存在
 const good = run(baseArgs)
 const produced = existsSync(out)
-if (good.code !== 0 || !produced) failures.push(`正例失败（rc=${good.code}, 产物=${produced}）: ${good.out.trim().split('\n').slice(-1)[0]}`)
-say(good.code === 0 && produced, 'positive', `rc=${good.code} 产物=${produced}`)
+const announced = /ARCHIVE-OK /.test(good.out)
+if (good.code !== 0 || !produced || !announced) failures.push(`正例失败（rc=${good.code}, 产物=${produced}, ARCHIVE-OK=${announced}）: ${good.out.trim().split('\n').slice(-1)[0]}`)
+say(good.code === 0 && produced && announced, 'positive', `rc=${good.code} 产物=${produced} ARCHIVE-OK=${announced}`)
 
 if (produced) {
   // 2) 同一份输入两遍必须逐字节相同：档案可复现
@@ -72,9 +73,11 @@ if (produced) {
 }
 
 // 3) 少一个输入 → 必须红
+// 缺参必须是 exit 2 并且点名缺的那个：只要求「非零」会被后面任何一个失败蒙混过去。
 const noRepo = run(baseArgs.filter((a, i, arr) => a !== '--repo-json' && arr[i - 1] !== '--repo-json'))
-if (noRepo.code === 0) failures.push('少 --repo-json 仍然 rc=0：缺参不许降级')
-say(noRepo.code !== 0, 'missing-input', `rc=${noRepo.code}`)
+const namedInput = /--repo-json/.test(noRepo.out)
+if (noRepo.code !== 2 || !namedInput) failures.push(`少 --repo-json 时 rc=${noRepo.code}、点名=${namedInput}——契约是 exit 2 且点名缺的那个`)
+say(noRepo.code === 2 && namedInput, 'missing-input', `rc=${noRepo.code} 点名=${namedInput}`)
 
 // 4) 产物目录里缺 gates.flat.json → 必须红
 const noProduct = join(tmp, 'artifact-noproduct')
@@ -82,8 +85,9 @@ spawnSync('cp', ['-r', art, noProduct])
 rmSync(join(noProduct, 'gates.flat.json'), { force: true })
 const missing = run([SCRIPT, '--dir', noProduct, '--out', join(tmp, 'x.json'),
   '--run-json', sidecars[0], '--jobs-json', sidecars[1], '--artifacts-json', sidecars[2], '--repo-json', sidecars[3]])
-if (missing.code === 0) failures.push('产物目录缺 gates.flat.json 仍然 rc=0：产物存在性没有断言')
-say(missing.code !== 0, 'missing-product', `rc=${missing.code}`)
+const namedProduct = missing.out.includes('gates.flat.json')
+if (missing.code !== 2 || !namedProduct) failures.push(`产物目录缺 gates.flat.json 时 rc=${missing.code}、点名=${namedProduct}——契约是 exit 2 且点名缺的那个文件`)
+say(missing.code === 2 && namedProduct, 'missing-product', `rc=${missing.code} 点名=${namedProduct}`)
 
 // 5) 浅历史 → 必须红
 //
@@ -109,8 +113,8 @@ if (!existsSync(join(shallow, 'scripts/archive-live-run.sh'))) {
   if (isShallow !== 'true') failures.push(`这一份不是浅检出（is-shallow-repository=${isShallow}），判「浅历史必须红」就没有意义`)
   const shallowRun = run(['scripts/archive-live-run.sh', '--dir', art, '--out', join(tmp, 'y.json'),
     '--run-json', sidecars[0], '--jobs-json', sidecars[1], '--artifacts-json', sidecars[2], '--repo-json', sidecars[3]], shallow)
-  if (shallowRun.code === 0) failures.push('浅历史下仍然 rc=0：P3 等于拿一个提交充数')
-  say(shallowRun.code !== 0, 'shallow-history', `rc=${shallowRun.code} is-shallow=${isShallow} ${how}`)
+  if (shallowRun.code !== 1 || !/浅历史/.test(shallowRun.out)) failures.push(`浅历史下 rc=${shallowRun.code}：契约是 exit 1 并点名浅历史`)
+  say(shallowRun.code === 1 && /浅历史/.test(shallowRun.out), 'shallow-history', `rc=${shallowRun.code} is-shallow=${isShallow} ${how}`)
 }
 
 rmSync(tmp, { recursive: true, force: true })
