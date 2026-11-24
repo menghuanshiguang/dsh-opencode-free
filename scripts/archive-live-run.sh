@@ -16,6 +16,13 @@
 # 三个前置门的输入在这里现取，不让调用方各写一遍：LICENSE 来自 `git show HEAD:LICENSE`，
 # 历史来自 `git log -p --all`，仓库事实来自 --repo-json。
 #
+# 一条贯穿这份脚本的规矩（四次额度买来的）：**每条写进档案的断言，问一句「这个值在写它
+# 的那一刻能不能被观测到」**。答不上来的，改判据、不许改数据。已经踩过的三次：
+#   transport 只有 derived 却被要求 observed；归档查 artifacts 列表，+15 毫秒还没索引到；
+#   自归档问 run 自己的 conclusion，那一刻它必然还是 null。
+# 因此 run 内这份档案照实写 conclusion=null + status=in_progress，只声称「请求层与门全过」；
+# 结论由 scripts/seal-live-run.sh 在 run 结束后用同一份脚本另出一份封存档案。
+#
 # 退出码：
 #   0  产出 <archive.json>，末行打印 `ARCHIVE-OK <path>`
 #   2  缺参数，或产物目录里缺必需文件——缺参数不许降级成「跳过判定」

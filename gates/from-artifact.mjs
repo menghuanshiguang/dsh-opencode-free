@@ -58,6 +58,8 @@ const readJson = p => JSON.parse(read(p))
 const fail = message => { console.error(`FROM-ARTIFACT REFUSED: ${message}`); process.exit(1) }
 
 const run = readJson(runJsonPath)
+// 「运行中」的判据只有一处：run 的 status。没有 status 的夹具按已结束处理。
+const runningStatuses = ['queued', 'in_progress', 'requested', 'waiting', 'pending']
 const repoDoc = repoJsonPath2 ? readJson(repoJsonPath2) : undefined
 if (repoDoc && repoDoc.full_name !== run.repository.full_name) fail('repo.json 与 run 不是同一个仓库')
 // 选哪一个 artifact，两条路，不会互相兜底：
@@ -178,9 +180,18 @@ const record = {
     url: run.html_url,
     workflow: run.name,
     event: run.event,
-    conclusion: run.conclusion,
+    // 观测值，不编：自归档时 run 还没结束，这个值此刻只能是 null。
+    // 它能不能被当成结论，由 validate 按 status 判断（null + 非终态才放行）。
+    conclusion: run.conclusion ?? null,
+    // status 是「结论还在路上的那一半事实」：没有它，「允许 null」就是后门。
+    status: run.status ?? null,
     liveStepOutcome: liveStep.conclusion,
-    failedSteps: failedSteps.map(s => ({ name: s.name, reason: failedStepReason ?? derivedReason ?? '未说明' })),
+    // 同一类账：run 没结束时，这条 run 里还没发生的失败步不可能被观测到，
+    // 空数组是一句「没有失败步」的断言。自归档时照实写 null（还没发生），
+    // 只有 run 已结束才写列表——那时 [] 才有意义。
+    failedSteps: runningStatuses.includes(run.status)
+      ? null
+      : failedSteps.map(s => ({ name: s.name, reason: failedStepReason ?? derivedReason ?? '未说明' })),
     attempt: run.run_attempt,
     createdAt: run.created_at,
     headSha: run.head_sha,

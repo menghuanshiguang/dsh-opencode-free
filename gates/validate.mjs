@@ -89,9 +89,27 @@ if (str(run.url) && int(run.id, 1)) {
 }
 check('run.workflow', str(run.workflow), '必须非空')
 check('run.event', run.event === 'workflow_dispatch', '只接受 workflow_dispatch')
-check('run.conclusion', ['success', 'failure'].includes(run.conclusion), '只能是 success 或 failure')
+// 自归档：归档跑在自己这条 run 里，那一刻 conclusion 必然是 null（run 没结束）。
+// 所以 stage 4 允许 null，但只在「status 还没到终态、且 live 步骤成功」时——
+// 放宽必须带这三条一起，否则任何人都能拿一份没有结论的档案过关。
+// stage 0 不受影响：那里的档案是在 run 结束后产出的，结论必须是真值。
+const TERMINAL_STATUSES = ['completed']
+const RUNNING_STATUSES = ['queued', 'in_progress', 'requested', 'waiting', 'pending']
+const selfArchived = run.conclusion === null
+  && RUNNING_STATUSES.includes(run.status)
+  && run.liveStepOutcome === 'success'
+const conclusionOk = ['success', 'failure'].includes(run.conclusion)
+  || (String(stage) === '4' && selfArchived)
+check('run.conclusion', conclusionOk, selfArchived && String(stage) === '4'
+  ? '只能是 success 或 failure'
+  : `只能是 success 或 failure；stage 4 自归档时可为 null，但要求 status ∈ {${RUNNING_STATUSES.join(',')}}（实际 ${JSON.stringify(run.status)}）且 live 步骤成功`)
+check('run.status', !TERMINAL_STATUSES.includes(run.status) || run.conclusion !== null || String(stage) !== '4',
+  `status=completed 却没有结论：这不是自归档，是缺结论，必须红色`)
 check('run.liveStepOutcome', run.liveStepOutcome === 'success', 'live 步骤本身必须成功（0.5/0.6/0.7 的证据来源）')
-check('run.failedSteps', Array.isArray(run.failedSteps), '必须是数组（成功时为空）')
+// 同上：run 未终态时，失败步还没发生，空数组是假账。stage 4 自归档时允许 null。
+const failedStepsOk = Array.isArray(run.failedSteps)
+  || (String(stage) === '4' && run.failedSteps === null && selfArchived)
+check('run.failedSteps', failedStepsOk, '必须是数组（成功时为空）；stage 4 自归档时可为 null——失败步那时还没发生')
 check('run.attempt', int(run.attempt, 1), '必须是 ≥1 的整数')
 check('run.createdAt', typeof run.createdAt === 'string' && !Number.isNaN(Date.parse(run.createdAt)), '必须是 ISO 时间')
 check('run.headSha', hex(run.headSha, 40), '必须是小写 40 位 hex')
