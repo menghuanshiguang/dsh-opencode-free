@@ -72,7 +72,9 @@ jobs:
           set -euo pipefail
           node tools/gates-selftest.mjs | tee gates-selftest.txt
           node gates/selftest.mjs | tee gates-archive-selftest.txt
-          node gates/validate.mjs gates/fixtures/stage0.synthetic.json --stage 0 --allow-synthetic | tee gates-validate.txt
+          # stage 0 缺 --lock 现在 exit 2（闸门缺参不许降级）。夹具这一跑同样必须带锁，
+          # 否则被自己的规矩判死——这不是放宽 exit 2 的理由，是夹具该带参数。
+          node gates/validate.mjs gates/fixtures/stage0.synthetic.json --stage 0 --allow-synthetic --lock docs/fingerprint-baseline.json | tee gates-validate.txt
           # The archived records must stay valid against the lock, not only the fixture.
           for f in gates/stage0/*.json; do
             [ "$(basename "$f")" = index.json ] && continue
@@ -178,11 +180,18 @@ jobs:
           cp tools/gh-anon-shim.mjs "$RUNNER_TEMP/bin/gh"
           chmod +x "$RUNNER_TEMP/bin/gh"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-          # The next step runs in a fresh shell, so this is the one place the
-          # resolution can be checked before the fetch: if PATH did not take, the
-          # runner's real `gh` would fetch with a token and this step would still
-          # look green. 验收员's audit item A4.
-          resolved=$(bash -lc 'command -v gh')
+
+      # Two facts decide how this is asserted. GitHub runs a `run:` step with the
+      # default shell as `bash --noprofile --norc -eo pipefail {0}` — a NON-login
+      # shell, which is also what the fetch step gets. And `$GITHUB_PATH` only takes
+      # effect for steps that start after the one that wrote it. So the assertion
+      # lives in its own step, in the same shell kind the fetch will use; asking a
+      # login shell (`bash -lc`) would re-source /etc/profile, put /usr/bin back in
+      # front, and measure an environment no step ever runs in.
+      - name: the shim is what `gh` resolves to (same shell as the fetch)
+        run: |
+          set -euo pipefail
+          resolved=$(command -v gh)
           echo "gh resolves to $resolved"
           test "$resolved" = "$RUNNER_TEMP/bin/gh" || { echo "::error::gh resolves to $resolved, not the anonymous shim at $RUNNER_TEMP/bin/gh"; exit 1; }
 
