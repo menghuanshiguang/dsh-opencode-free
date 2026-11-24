@@ -1,0 +1,2 @@
+{"kind":"request","url":"/inference/openai/v1/chat/completions"}
+{"kind":"response","status":200}

@@ -1,0 +1,40 @@
+{
+  "model": "nemotron-3.5-lightning-free",
+  "userAgent": "opencode/latest/2.2.3/cli",
+  "endpoint": "/inference/openai/v1/chat/completions",
+  "toolsSha256Wire": "6fb3aed805228cc69ca5e838b7af2fffa9bf57b8c27ebd7606fd94e41c05b77f",
+  "toolsSha256Unwrapped": "cc9d7cc820eb997ecec0b84983c1a0cd46071605333f60f8732981bb8a0df421",
+  "toolCount": 13,
+  "toolNames": [
+    "edit",
+    "glob",
+    "grep",
+    "patch",
+    "question",
+    "read",
+    "shell",
+    "skill",
+    "subagent",
+    "todowrite",
+    "webfetch",
+    "websearch",
+    "write"
+  ],
+  "systemPromptSha256Normalized": "e6a83906e2ae9a904930fc75e08e8f08211788cb0550994e924a7596755adb84",
+  "bodyKeys": [
+    "max_completion_tokens",
+    "messages",
+    "model",
+    "stream",
+    "stream_options",
+    "tools"
+  ],
+  "sessionRegex": "^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$",
+  "sessionPhaseWindowHours": 720,
+  "xOpencodeHeaders": [
+    "x-opencode-client",
+    "x-opencode-project",
+    "x-opencode-session",
+    "x-opencode-session-id"
+  ]
+}
