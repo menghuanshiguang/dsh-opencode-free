@@ -46,12 +46,14 @@ if (PRINT) {
   process.exit(0)
 }
 
-const archiveArgs = (dir, out) => [
+const archiveArgs = (dir, out, extra = {}) => [
   'gates/from-artifact.mjs',
   '--dir', dir,
   '--run-json', join(FIX, 'run.json'),
   '--jobs-json', join(FIX, 'jobs.json'),
-  '--artifacts-json', join(FIX, 'artifacts.json'),
+  '--artifacts-json', extra.list ?? join(FIX, 'artifacts.json'),
+  ...(extra.id ? ['--artifact-id', extra.id] : []),
+  ...(extra.byId ? ['--artifact-json', extra.byId] : []),
   '--repo-json', join(FIX, 'repo.json'),
   '--preconditions', join(FIX, 'preconditions.json'),
   '--negative-tests', join(FIX, 'negative-tests.json'),
@@ -77,6 +79,32 @@ if (failures.length === 0) {
   if (v.code !== 0) failures.push(`the produced record does not validate at stage 4 (exit ${v.code}): ${v.stdout.trim().split('\n').slice(-1)[0]}`)
 }
 
+// 正例：artifacts 列表是空的（上传刚结束那一秒的真实形状），但给了 upload-artifact 自己的
+// artifact-id 与按 id 取回的单件响应——必须照样产出，并且仍然过 stage 4 的 validate。
+// 这一条就是第三发红掉的那个 15 毫秒：判据不许是「等列表追上」，只能是「用上传给的 id」。
+let byIdCase = 'not run'
+{
+  const emptyList = join(tmp, 'artifacts-empty.json')
+  writeFileSync(emptyList, JSON.stringify({ total_count: 0, artifacts: [] }, null, 2))
+  const fixtureArtifact = JSON.parse(readFileSync(join(FIX, 'artifacts.json'), 'utf8')).artifacts[0]
+  const byIdPath = join(tmp, 'artifact-by-id.json')
+  writeFileSync(byIdPath, JSON.stringify({ ...fixtureArtifact, id: 14917330510 }, null, 2))
+  const viaIdOut = join(tmp, 'by-id.json')
+  const viaId = run(archiveArgs(join(FIX, 'artifact'), viaIdOut, { list: emptyList, id: '14917330510', byId: byIdPath }))
+  if (viaId.code !== 0) {
+    failures.push(`an empty artifacts list with an artifact-id was refused (exit ${viaId.code}) — the id is the fact; waiting for the list is the 15 ms race: ${(viaId.stderr + viaId.stdout).trim().split('\n').slice(-1)[0]}`)
+    byIdCase = `refused (exit ${viaId.code})`
+  } else {
+    const digest = String(fixtureArtifact.digest).replace(/^sha256:/, '')
+    const doc = JSON.parse(readFileSync(viaIdOut, 'utf8'))
+    const shaOk = String(doc.artifacts?.[0]?.sha256 ?? '') === digest
+    const v = run(['gates/validate.mjs', viaIdOut, '--stage', '4', '--lock', join(ROOT, 'docs/fingerprint-baseline.json')])
+    if (!shaOk) failures.push(`the by-id archive carries artifact sha256 ${JSON.stringify(doc.artifacts?.[0]?.sha256)}, the by-id response says ${digest}`)
+    if (v.code !== 0) failures.push(`the by-id archive does not validate at stage 4 (exit ${v.code}): ${v.stdout.trim().split('\n').slice(-1)[0]}`)
+    byIdCase = `archived from the id alone, sha256=${shaOk ? 'match' : 'MISMATCH'}, validate=${v.code === 0 ? 'pass' : 'FAIL'}`
+  }
+}
+
 // 反向：扁平产物（那次 live 的真实形状）必须被拒
 const flatDir = join(tmp, 'flat')
 cpSync(join(FIX, 'artifact'), flatDir, { recursive: true })
@@ -88,6 +116,6 @@ else if (!/FROM-ARTIFACT REFUSED/.test(flat.stderr + flat.stdout)) failures.push
 rmSync(tmp, { recursive: true, force: true })
 
 for (const line of failures) console.log(`FAIL ${line}`)
-console.log(`checked: conforming product archived twice (${identical ? 'byte-identical' : 'not compared'}), validated at stage 4; flat product refused`)
+console.log(`checked: conforming product archived twice (${identical ? 'byte-identical' : 'not compared'}), validated at stage 4; empty artifacts list + artifact-id: ${byIdCase}; flat product refused`)
 console.log(`LIVE-ARTIFACT: ${failures.length === 0 ? 'PASS' : 'FAIL'}`)
 process.exit(failures.length === 0 ? 0 : 1)

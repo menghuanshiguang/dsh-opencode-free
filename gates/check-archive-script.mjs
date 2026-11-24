@@ -4,18 +4,23 @@
 //
 // 脚本契约（由闸门这一侧定，实现照此写）：
 //   scripts/archive-live-run.sh --dir <产物目录> --out <archive.json> \
-//     --run-json <p> --jobs-json <p> --artifacts-json <p> --repo-json <p> [--product <name>]
+//     --run-json <p> --jobs-json <p> --artifacts-json <p> --repo-json <p> [--product <name>] \
+//     [--artifact-id <N>] [--artifact-json <p>]
 //   输入：<dir>/live.json、<dir>/<product>（默认 gates.flat.json）、<dir>/fields.json、<dir>/egress.env
 //   三个前置门的输入由脚本自己取（git show HEAD:LICENSE、git log -p --all、--repo-json 指的那份），
 //   调用方不给，也不许各写一遍。
+//   --artifact-id 是 upload-artifact 自己给的 id，--artifact-json 是按 id 取回的单件响应。
+//   给了 id 就必须用 id 取物：列表为空也照样归档（第三发：artifact 11:45:18.966Z finalize、
+//   脚本 11:45:18.981Z 查列表，差 15 毫秒，列表没追上）；id 取不到就 exit 1 并点名该 id，
+//   不许回落到列表里的第一个，也不许改成轮询等列表追上。
 //   exit 0 产出 <archive.json>，并打印 `ARCHIVE-OK <path>`
 //   exit 2 缺参数或产物目录里缺必需文件
 //   exit 1 P1–P3 没全过（check-preconditions 的 pass 不是 true）、from-artifact 拒绝、validate 不过
 //   exit 1 浅历史（git rev-parse --is-shallow-repository = true）——浅历史下 P3 等于拿一个提交充数
 //
 // 脚本还不存在时本检查 exit 2：失败关闭，不许因为「还没实现」而静默通过。
-import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { spawn, spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -25,10 +30,22 @@ const FIX = join(ROOT, 'gates/fixtures/live-product')
 const LIVE_WORKFLOW = join(ROOT, '.github/workflows/free-lane-live.yml')
 
 const say = (ok, tag, detail) => console.log(`${ok ? 'ok  ' : 'FAIL'} ${tag.padEnd(22)} ${detail}`)
+const tail = text => (String(text).trim().split('\n').at(-1) ?? '')
 // `env bash` 而不是直接 `bash`：本机那层 shell 包装会把脚本后面的参数吞掉，
 // 在这里就等于永远测「缺参数」的分支。env 是同一个解释器，runner 上无差别。
 const run = (args, cwd = ROOT) => {
   const r = spawnSync('env', ['bash', ...args], { cwd, encoding: 'utf8' })
+  return { code: r.status ?? 1, out: `${r.stdout ?? ''}${r.stderr ?? ''}` }
+}
+// 这台机器 PATH 里的 `bash` / `env` 是包装器：经它们起的子进程既拿不到调用方给的 env
+// （`env bash …`、`bash -c …` 两种都丢），又会把位置参数吞掉（`bash <script> a b` 只剩 0 个）。
+// 唯一实测能同时保住变量与参数的是 `/bin/bash -c "<export …>; exec bash '<脚本>' '<参数>'…"`。
+// 假端点那两档必须把 GITHUB_* 送进脚本，所以单独走这一条；别的档照旧用 run。
+const quote = value => `'${String(value).split("'").join(`'\\''`)}'`
+const runWithEnv = (args, env) => {
+  const assigns = Object.entries(env).map(([key, value]) => `export ${key}=${quote(value)}`).join('; ')
+  const command = `${assigns}; exec bash ${args.map(quote).join(' ')}`
+  const r = spawnSync('/bin/bash', ['-c', command], { cwd: ROOT, encoding: 'utf8' })
   return { code: r.status ?? 1, out: `${r.stdout ?? ''}${r.stderr ?? ''}` }
 }
 
@@ -92,7 +109,104 @@ if (produced) {
   say(same, 'reproducible', `rc=${second.code} 逐字节相同=${same}`)
 }
 
-// 3) 少一个输入 → 必须红
+// 3) 第三发红在这里：artifact 11:45:18.966Z finalize，脚本 11:45:18.981Z 查 artifacts
+//    列表，差 15 毫秒，列表没追上 → FROM-ARTIFACT REFUSED: 没有 artifact。判据不许是
+//    「等它出现」（轮询等一个可能永远不来的东西），只能是「用上传自己给的 artifact-id」。
+//    三档都由假端点判死，不碰真 API：
+//      A) 列表为空 + 给了 id 与按 id 取回的单件响应 → 必须照样归档（第一个字都不读列表）
+//      B) 按 id 取件首轮 404、次轮 200（15 毫秒竞态的形状）→ 有界重试后必须成功
+//      C) 按 id 取件永远 404 → 必须 exit 1 并点名该 id 与状态码，不许回落成列表里的第一个
+const liveArtifactId = '14917330510'
+const goneId = '14917330599'
+const fixtureArtifact = JSON.parse(readFileSync(sidecars[2], 'utf8')).artifacts[0]
+const emptyList = join(tmp, 'artifacts-empty.json')
+writeFileSync(emptyList, JSON.stringify({ total_count: 0, artifacts: [] }, null, 2))
+const byIdPath = join(tmp, 'artifact-by-id.json')
+writeFileSync(byIdPath, JSON.stringify({ ...fixtureArtifact, id: Number(liveArtifactId) }, null, 2))
+
+// 「按 id 取件」要打的是脚本自己的重试循环，而假端点不能是本机 HTTP 服务：实测这个
+// 环境里它起不来（node 子进程的 port 文件永远不出现；验收员 用 python 起服务同样失败）。
+// 所以假端点用 PATH 上的 curl shim 扮 HTTP——应答是假的，被测的重试循环与退出码是真的。
+const shimDir = join(tmp, 'bin')
+mkdirSync(shimDir, { recursive: true })
+const shim = join(shimDir, 'curl')
+writeFileSync(shim, [
+  '#!/usr/bin/env bash',
+  '# 只扮演 GET /actions/artifacts/<id>：SHIM_FIRST_404=1 则首轮 404、次轮 200；',
+  '# SHIM_ALWAYS_404=1 则永远 404。状态放在 SHIM_STATE 里，每次调用自增。',
+  'set -u',
+  'state=${SHIM_STATE:?}',
+  'n=0',
+  '[ -s "$state/count" ] && read -r n < "$state/count"',
+  'n=$(( n + 1 ))',
+  'printf "%s\\n" "$n" > "$state/count"',
+  "out=''; fmt=''; url=''",
+  'while [ $# -gt 0 ]; do',
+  '  case "$1" in',
+  '    -o) out=${2:-}; shift 2 ;;',
+  '    -w) fmt=${2:-}; shift 2 ;;',
+  '    -H | -m | --max-time) shift 2 ;;',
+  '    -sS | -s | -S) shift 1 ;;',
+  '    *) url=$1; shift 1 ;;',
+  '  esac',
+  'done',
+  'if [ "${SHIM_ALWAYS_404:-0}" = 1 ] || { [ "${SHIM_FIRST_404:-0}" = 1 ] && [ "$n" -eq 1 ]; }; then',
+  "  [ -n \"$out\" ] && printf '%s' '{\"message\":\"Not Found\",\"status\":\"404\"}' > \"$out\"",
+  '  printf 404',
+  'else',
+  '  [ -n "$out" ] && cp "$SHIM_ARTIFACT" "$out"',
+  '  printf 200',
+  'fi',
+  '',
+].join('\n'), { mode: 0o755 })
+spawnSync('chmod', ['755', shim])
+const shimEnv = extra => ({
+  PATH: `${shimDir}:${process.env.PATH ?? ''}`,
+  SHIM_ARTIFACT: byIdPath,
+  GITHUB_TOKEN: 'fixture-token',
+  GITHUB_REPOSITORY: 'fixture/repo',
+  GITHUB_API_URL: 'https://api.github.com',
+  ...extra,
+})
+const freshState = name => {
+  const dir = join(tmp, name)
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+const listArgs = ['--run-json', sidecars[0], '--jobs-json', sidecars[1],
+  '--artifacts-json', emptyList, '--repo-json', sidecars[3]]
+
+const lagOut = join(tmp, 'archive-lag.json')
+const lag = run([SCRIPT, '--dir', art, '--out', lagOut, ...listArgs, '--artifact-id', liveArtifactId, '--artifact-json', byIdPath])
+const lagArchived = lag.code === 0 && existsSync(lagOut)
+if (!lagArchived) failures.push(`列表为空、但给了 --artifact-id 与按 id 取回的单件响应时 rc=${lag.code}——契约是照样归档: ${tail(lag.out)}`)
+say(lagArchived, 'artifacts-lag', `rc=${lag.code} 归档=${existsSync(lagOut)}`)
+
+const retryOut = join(tmp, 'archive-retry.json')
+const retry = runWithEnv([SCRIPT, '--dir', art, '--out', retryOut, ...listArgs, '--artifact-id', liveArtifactId],
+  shimEnv({ SHIM_STATE: freshState('state-retry'), SHIM_FIRST_404: '1' }))
+const refetched = /取件 HTTP 200/.test(retry.out)
+const firstWas404 = /第 1 次取件返回 HTTP 404/.test(retry.out)
+const retryOk = retry.code === 0 && existsSync(retryOut) && refetched && firstWas404
+if (!retryOk) failures.push(`按 id 取件首轮 404、次轮 200 时 rc=${retry.code} 取到=${existsSync(retryOut)} 首轮404=${firstWas404} 次轮200=${refetched}——契约是有界重试后归档成功，不许一 404 就判死: ${tail(retry.out)}`)
+say(retryOk, 'artifact-id-retry', `rc=${retry.code} 首轮404=${firstWas404} 次轮200=${refetched} 归档=${existsSync(retryOut)}`)
+
+const goneOut = join(tmp, 'archive-gone.json')
+const gone = runWithEnv([SCRIPT, '--dir', art, '--out', goneOut, ...listArgs, '--artifact-id', goneId],
+  shimEnv({ SHIM_STATE: freshState('state-gone'), SHIM_ALWAYS_404: '1' }))
+const goneNamed = gone.out.includes(goneId) && gone.out.includes('404')
+const goneRefused = gone.code === 1
+if (!goneRefused || !goneNamed) failures.push(`按 id 取件永远 404 时 rc=${gone.code} 点名=${goneNamed}——契约是 exit 1 并点名该 id 与状态码，不许回落成列表里的第一个（回落就等于把这次竞态藏起来）: ${tail(gone.out)}`)
+say(goneRefused && goneNamed, 'artifact-id-missing', `rc=${gone.code} 点名id与404=${goneNamed}`)
+
+// 报错必须说实话：两次都失败时，最后那次后面不该再挂「2 秒后重试」——没有第三次了。
+// 这条只管措辞，不管拦不拦得住，所以单独一档，别和上面混着判。
+const retryClaims = (gone.out.match(/重试/g) ?? []).length
+const wordingOk = goneRefused && retryClaims <= 1
+if (!wordingOk) failures.push(`两次取件都失败时，「重试」出现 ${retryClaims} 次（应当只在第 1 次之后出现，最多 1 次）——最后一次后面说「2 秒后重试」是假话，没有第三次了: ${tail(gone.out)}`)
+say(wordingOk, 'retry-wording', `「重试」出现 ${retryClaims} 次（上限 1）`)
+
+// 3b) 少一个输入 → 必须红
 // 缺参必须是 exit 2 并且点名缺的那个：只要求「非零」会被后面任何一个失败蒙混过去。
 const noRepo = run(baseArgs.filter((a, i, arr) => a !== '--repo-json' && arr[i - 1] !== '--repo-json'))
 const namedInput = /--repo-json/.test(noRepo.out)
