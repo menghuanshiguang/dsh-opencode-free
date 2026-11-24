@@ -55,6 +55,46 @@ v2.2.3 system prompt, the 13 tool contracts in the lane's wire order, the
 caller's JSON unchanged would be refused by the free tier (403 FreeTierError /
 429), which is why shaping is not optional.
 
+## Requirements and limits
+
+**Bun is a prerequisite for the lane.** The gateway itself is a Node `>=20`
+`node:http` server and the runtime has no dependencies, but every request that
+leaves for `opencode.ai/inference/*` — the completions and the model listing
+alike — goes through the production Bun worker in `src/bun-fetch.js`, which is
+the released client's own fetch stack. With no `bun` executable to be found
+(`$OUR_FREE_MODEL_BUN`, then `~/.bun/bin/bun`, then `bun` on `PATH`) a lane
+request fails with
+
+```
+Bun executable not found; set OUR_FREE_MODEL_BUN to a native executable.
+```
+
+and it is not retried on the Node transport. That path exists as a diagnostic,
+never as acceptance evidence: a Node-only run has never been what this
+repository calls a pass.
+
+**Only the free lane, with no credential anywhere.** There is no account to add,
+no key to set, no channel to choose. The lane is reached anonymously, the
+request body is the official released shape, and a model id without the `-free`
+suffix is refused locally with 400 — so a paid request cannot be sent by
+mistake, and there is no configuration that would let one be.
+
+**One request per run, one run at a time.** `free-lane-live` is
+`workflow_dispatch` only. `confirm` must be exactly `true`, a model id holding a
+space or comma is refused ("exactly one model per run"), and the id must match
+`^[a-z0-9][a-z0-9.-]*-free$`. The run refuses to start while any other live run
+is `queued`, `in_progress`, `waiting`, `requested` or `pending`, and holds a
+900-second cooldown after a run whose `live request` step actually ran — a run
+that stopped before that step spent nothing and does not start the cooldown.
+The 900 seconds is a floor, not the working rule: two live runs are kept at
+least an hour apart, and "the workflow would have allowed it" has never been a
+reason to dispatch one.
+
+**Derived code travels with its notice.** This package is MIT, derived from
+`Ebony-Vinyl/dsh-our-free-model` at `f29116ba`; `LICENSE` carries the upstream
+text and its third-party notices, and it ships with the package (`files` in
+`package.json`) rather than living only in the repository.
+
 ## Evidence has to be able to go red
 
 Every assertion this repository makes about a zero, an equality or a single
@@ -83,7 +123,15 @@ when all four families hold:
 
 1. **import set** — every imported upstream file still hashes to the blob the
    pin names, or is declared adapted/removed in `docs/adaptations.json` with a
-   reason (`899 = 7 imported + 892 excluded`, disjoint);
+   reason (`899 = 7 imported + 892 excluded`, disjoint). The 7 imported split
+   `3 verbatim + 3 adapted + 1 removed`, and `src/` holds those 6 plus
+   `1 added` (`src/gateway.js`, this package's own entry) — eight declared
+   paths, seven modules on disk, because the removal is gone by definition.
+   The counts are not prose: `scripts/check-extraction.mjs` compares
+   `gates/extraction-whitelist.json`'s `verbatim`/`adapted`/`removed`/`added`
+   lists against `docs/adaptations.json` and the import set in both
+   directions, so a path called byte-identical in one place and adapted in the
+   other goes red;
 2. **excluded reach** — no shipped module imports an excluded path, which is
    the machine form of "no account channels were carried along";
 3. **public surface** — the entry exports exactly `{createGateway,
@@ -128,3 +176,22 @@ It refuses a second run in flight, records the egress IP and country, requires
 the production Bun transport, and asserts the fingerprint baseline before it
 spends anything. Its artifacts carry `gates.json`, the wire capture, and the raw
 upstream response.
+
+### The record comes in two forms
+
+A record written *inside* the run that it describes cannot know how that run
+ended — `run.conclusion` is still `null` at that moment, and `failedSteps` is
+not `[]` (nothing has failed yet, but nothing has been skipped either). So the
+in-run archive says `conclusion: null`, `status: in_progress`, `failedSteps:
+null`: it proves the request layer and the gates, and it does not claim the
+outcome. `scripts/archive-live-run.sh` produces it.
+
+After the run has finished, `scripts/seal-live-run.sh <run-id> --out <dir>`
+produces the second form through the same archive code, and only that one is
+allowed to say `conclusion: success` — it refuses a run whose conclusion is not
+`success` and whose status is not `completed`. It binds the artifact by exact
+name, `live-<run-id>`: a second artifact named `archive-<run-id>` also contains
+the run id, and a selector that matched on "the name contains the id" picked
+whichever came first in the API's list, which bound the sealed record to the
+wrong artifact while every field still validated. Zero matches or two matches
+are both refused; there is no fallback to the list order.

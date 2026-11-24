@@ -59,15 +59,33 @@ else
   node -e 'const d=JSON.parse(require("node:fs").readFileSync(process.argv.at(-1),"utf8"));process.exit(d.status==="completed"?0:1)' "$runjson" ||
     die 1 "run $runid 的 status 不是 completed，仍然谈不上封存"
 
-  # 取这一件的 id 与 digest，再按 id 下载 zip
+  # 取这一件的 id 与 digest，再按 id 下载 zip。
+  #
+  # 选件必须**精确命中唯一一件** `live-<run-id>`。同一个 run 名下还有一件
+  # `archive-<run-id>`，两个名字都含 run id：按 `includes(runId)` 取第一件，
+  # 取到的是列表里靠前的那一个，而真实的列表顺序是 archive- 在前、live- 在后，
+  # 于是封存档案的 artifacts[0] 绑在 archive- 上，内容却取自 live-——绑定成了假话。
+  # validate 只查字段齐备，不看绑的是谁，rc 依然 0。这就是按顺序选件的老病。
+  #
+  # 所以这里不出选项：名字必须等号相等，命中 0 件或 2 件都拒（不挑、不回落）。
+  #
+  # 参数用 .at(-2)/.at(-1) 取，不用 argv[1]/argv[2]：`node -e` 下 process.argv 是
+  # ['/path/node', '[eval]', arg1, arg2]，[eval] 把下标整体推后一位，Linux 上同样如此。
   pick=$out/artifact.pick
   node -e '
-const d = JSON.parse(require("node:fs").readFileSync(process.argv[2], "utf8"))
-const runId = process.argv[1]
-const a = (d.artifacts ?? []).find(x => String(x.name ?? "").includes(runId))
-if (!a) process.exit(1)
+const fs = require("node:fs")
+const d = JSON.parse(fs.readFileSync(process.argv.at(-1), "utf8"))
+const want = `live-${String(process.argv.at(-2))}`
+const all = Array.isArray(d.artifacts) ? d.artifacts : []
+const hits = all.filter(a => String(a.name ?? "") === want)
+if (hits.length !== 1) {
+  const seen = all.map(a => String(a.name ?? "")).join(", ") || "(none)"
+  process.stderr.write(`expected exactly one artifact named ${want}, found ${hits.length}; list = ${seen}\n`)
+  process.exit(1)
+}
+const a = hits[0]
 process.stdout.write(`${a.id}\n${String(a.digest ?? "").replace(/^sha256:/, "")}\n${a.name}\n`)
-' "$runid" "$artifactsjson" > "$pick" || die 1 "run $runid 的 artifact 列表里没有它自己的那一件"
+' "$runid" "$artifactsjson" > "$pick" || die 1 "run $runid 的 artifacts 里没有唯一的 live-$runid（多命中也不挑）"
   aid=$(sed -n '1p' "$pick"); adigest=$(sed -n '2p' "$pick"); aname=$(sed -n '3p' "$pick")
   [ -n "$aid" ] || die 1 "artifact 没有 id，没法按 id 取件"
   zip=$out/artifact.zip
