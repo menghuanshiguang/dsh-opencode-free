@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "stage": "2",
+  "rule": "Every imported upstream file is either still byte-identical, declared adapted here with a reason, or declared removed. An adaptation that did not change the bytes, or a rewrite that was never declared, fails scripts/check-extraction.mjs.",
+  "adapted": [
+    {
+      "path": "src/store.js",
+      "baselineBlob": "e0c1cbdee34d20f87d1e7b768f6aaffadc5d7075",
+      "reason": "The upstream store also owned user settings, usage history, probe results and a proxy key ring. Those belong to the account channels this package does not have, so the file keeps only the data-directory resolution the lane needs."
+    },
+    {
+      "path": "src/egress.js",
+      "baselineBlob": "257fbcf219db4face6537fa7792b2a175bb33389",
+      "reason": "The upstream egress layer carries the outlet ladder, the lane-exit pool and the loopback CONNECT relay: routing for a paid, multi-account channel. One anonymous lane has nothing to choose between, so the file is one function with one transport."
+    }
+  ],
+  "removed": [
+    {
+      "path": "src/open-external.js",
+      "reason": "It existed to restrict file permissions for the settings and key-ring stores, which are gone; nothing in the kept closure imports it any more."
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "dsh-opencode-free",
+  "version": "0.1.0",
+  "description": "The OpenCode free lane behind a local OpenAI-compatible gateway: one anonymous client identity, no accounts, no credentials.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/gateway.js"
+  },
+  "main": "./src/gateway.js",
+  "files": [
+    "src/",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test scripts/tests/*.test.mjs",
+    "typecheck": "tsc -p scripts/tsconfig.json",
+    "check:extraction": "node scripts/check-extraction.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
