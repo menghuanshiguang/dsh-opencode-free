@@ -132,13 +132,13 @@ function startFakeApi({ artifacts, zipPath }) {
  * silently loses the run id and the output directory. A single command string
  * with quoted paths behaves the same everywhere.
  */
-function seal(port, out) {
+function seal(port, out, script = SCRIPT) {
   const q = value => `'${String(value).replace(/'/g, `'\\''`)}'`
   const command = [
     `export GITHUB_API_URL=${q(`http://127.0.0.1:${port}`)}`,
     `export GITHUB_TOKEN=${q('test-fixture-not-a-credential')}`,
     `export GITHUB_REPOSITORY=${q('o/r')}`,
-    `exec bash ${q(SCRIPT)} ${q(RUN_ID)} --out ${q(out)}`,
+    `exec bash ${q(script)} ${q(RUN_ID)} --out ${q(out)}`,
   ].join('; ')
   // `spawn`, not `spawnSync`, and that is not a style preference.
   //
@@ -169,6 +169,45 @@ function seal(port, out) {
       resolveCase({ status, timedOut: timedOut || status === null, stdout, stderr })
     })
   })
+}
+
+/**
+ * A copy of the seal script with one deliberate regression, and its path.
+ *
+ * Three of the five cases above assert that the script *refuses* something. A
+ * green refusal case says only that a refusal happened; it does not say the
+ * assertion would ever fail if the refusal were removed, because a script that
+ * dies for any reason while nobody downloads anything satisfies it. Green is
+ * not the same as able to go red, and this project had no evidence for those
+ * three. Each mutation test below removes exactly one refusal, runs the same
+ * fixture again, and asserts the case's own condition is now false.
+ *
+ * The occurrence count in here is the point, not boilerplate: a mutation whose
+ * pattern does not match changes nothing, the script behaves exactly as before,
+ * and the case stays green while looking like a proof that it can go red. That
+ * is not hypothetical here -- a mutation aimed at a string that appeared in
+ * neither README reported no difference and was read as a clean result.
+ *
+ * The copy sits at <scratch>/mut-<name>/scripts/seal-live-run.sh so the
+ * script's own `dirname/..` resolves to a directory that exists. None of these
+ * three regressions reaches scripts/archive-live-run.sh: each is caught at the
+ * refusal or at the pick, which is where the case stops.
+ */
+function mutant(name, edits) {
+  assert.ok(Array.isArray(edits) && edits.length > 0, 'a mutation needs at least one edit')
+  const source = readFileSync(SCRIPT, 'utf8')
+  let text = source
+  for (const [from, to] of edits) {
+    const occurrences = text.split(from).length - 1
+    assert.equal(occurrences, 1, `mutation ${name}: the pattern must appear exactly once, found ${occurrences}`)
+    text = text.split(from).join(to)
+  }
+  assert.notEqual(text, source, `mutation ${name} changed nothing`)
+  const dir = join(scratch, 'mut', name, 'scripts')
+  mkdirSync(dir, { recursive: true })
+  const path = join(dir, 'seal-live-run.sh')
+  writeFileSync(path, text)
+  return path
 }
 
 const artifact = (id, name) => ({
@@ -270,6 +309,91 @@ test('online seal: it refuses a run that is not a completed success before it lo
     assert.equal(run.timedOut, false, `the script did not finish within 20s:\n${run.stderr}`)
     assert.equal(run.status, 1, `expected 1, got ${run.status}\n${run.stderr}`)
     assert.match(run.stderr, /conclusion=null/, 'the refusal must quote the conclusion it found')
+  } finally {
+    server.closeAllConnections?.()
+    server.close()
+  }
+})
+
+// ---- can those three cases go red? ----
+//
+// The five cases above are one group, not five independent proofs: two of them
+// (nested, flat) assert that a pick succeeds, and three of them (only archive-,
+// two live-, run still running) assert that a pick is refused. A refusal case
+// is the kind that stays green for the wrong reason -- anything that stops the
+// script before it downloads satisfies "status 1, no zip". So each of the three
+// gets a mutation that removes its refusal and a run that shows the case's own
+// condition turning false.
+
+test('mutation proof: a fallback pick turns case 3 red, because it downloads archive-', { timeout: 30_000 }, async () => {
+  const script = mutant('fallback-pick', [[
+    'const hits = all.filter(a => String(a.name ?? "") === want)\nif (hits.length !== 1) {',
+    'let hits = all.filter(a => String(a.name ?? "") === want)\nif (hits.length === 0 && all.length > 0) hits = [all[0]]\nif (hits.length !== 1) {',
+  ]])
+  const api = await startFakeApi({
+    artifacts: [artifact(ARCHIVE_ID, `archive-${RUN_ID}`)],
+    zipPath: makeZip('mut-fallback.zip', payload('_temp/')),
+  })
+  try {
+    const run = await seal(api.port, join(scratch, 'mut-fallback'), script)
+    assert.equal(run.timedOut, false, `the mutated script did not finish within 20s:\n${run.stdout}\n${run.stderr}`)
+    // Case 3 asserts deepEqual(zipRequests(api.seen), []) -- "a refusal must not
+    // download anything". With the fallback restored that assertion is false.
+    assert.notDeepEqual(
+      zipRequests(api.seen), [],
+      `the fallback pick still downloaded nothing, so case 3 would pass unchanged:\n${run.stdout}\n${run.stderr}`,
+    )
+    assert.match(
+      zipRequests(api.seen)[0], new RegExp(`/artifacts/${ARCHIVE_ID}/zip$`),
+      `it did not reach for the archive- artifact: ${zipRequests(api.seen)[0]}`,
+    )
+  } finally {
+    api.server.closeAllConnections?.()
+    api.server.close()
+  }
+})
+
+test('mutation proof: accepting a double match turns case 4 red, because it downloads one', { timeout: 30_000 }, async () => {
+  const script = mutant('accept-double', [['if (hits.length !== 1) {', 'if (hits.length === 0) {']])
+  const api = await startFakeApi({
+    artifacts: [artifact(LIVE_ID, `live-${RUN_ID}`), artifact(LIVE_ID + 1, `live-${RUN_ID}`)],
+    zipPath: makeZip('mut-double.zip', payload('_temp/')),
+  })
+  try {
+    const run = await seal(api.port, join(scratch, 'mut-double'), script)
+    assert.equal(run.timedOut, false, `the mutated script did not finish within 20s:\n${run.stdout}\n${run.stderr}`)
+    // Case 4 asserts deepEqual(zipRequests(api.seen), []) and stderr matching
+    // /found 2/. Under this mutation it picks hits[0] and downloads it.
+    assert.notDeepEqual(
+      zipRequests(api.seen), [],
+      `the double match still downloaded nothing, so case 4 would pass unchanged:\n${run.stdout}\n${run.stderr}`,
+    )
+  } finally {
+    api.server.closeAllConnections?.()
+    api.server.close()
+  }
+})
+
+test('mutation proof: dropping the conclusion gate turns case 5 red, by not quoting it', { timeout: 30_000 }, async () => {
+  const script = mutant('no-conclusion-gate', [['[ "$conclusion" = "success" ]', '[ -n "${conclusion:-}" ]']])
+  const server = createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json', connection: 'close' })
+    if ((req.url ?? '').endsWith('/jobs')) return res.end(JSON.stringify({ jobs: [] }))
+    res.end(JSON.stringify({ id: Number(RUN_ID), status: 'in_progress', conclusion: null }))
+  })
+  await new Promise((resolvePromise, rejectPromise) => {
+    server.once('error', rejectPromise)
+    server.listen(0, '127.0.0.1', resolvePromise)
+  })
+  try {
+    const run = await seal(server.address().port, join(scratch, 'mut-running'), script)
+    assert.equal(run.timedOut, false, `the mutated script did not finish within 20s:\n${run.stderr}`)
+    // Case 5 asserts stderr matching /conclusion=null/. With the gate gone the
+    // script stops later, at the status check, and never quotes the conclusion.
+    assert.doesNotMatch(
+      run.stderr, /conclusion=null/,
+      `the conclusion gate was dropped but the refusal still quotes it, so case 5's assertion is not what refused:\n${run.stderr}`,
+    )
   } finally {
     server.closeAllConnections?.()
     server.close()
