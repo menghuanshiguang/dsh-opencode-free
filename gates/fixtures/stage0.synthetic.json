@@ -11,7 +11,9 @@
     "attempt": 1,
     "createdAt": "2026-11-24T05:00:00.000Z",
     "headSha": "0123456789abcdef0123456789abcdef01234567",
-    "actor": "menghuanshiguang"
+    "actor": "menghuanshiguang",
+    "liveStepOutcome": "success",
+    "failedSteps": []
   },
   "repo": {
     "fullName": "menghuanshiguang/dsh-opencode-free",
@@ -49,19 +51,19 @@
   "fingerprint": {
     "toolCount": 13,
     "toolOrder": [
-      "read",
-      "shell",
       "edit",
       "glob",
       "grep",
-      "write",
       "patch",
-      "webfetch",
-      "websearch",
       "question",
+      "read",
+      "shell",
       "skill",
       "subagent",
-      "todowrite"
+      "todowrite",
+      "webfetch",
+      "websearch",
+      "write"
     ],
     "toolsSha256": "6fb3aed805228cc69ca5e838b7af2fffa9bf57b8c27ebd7606fd94e41c05b77f",
     "expectedToolsSha256": "6fb3aed805228cc69ca5e838b7af2fffa9bf57b8c27ebd7606fd94e41c05b77f",

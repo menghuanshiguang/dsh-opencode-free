@@ -51,7 +51,9 @@
         "conclusion",
         "attempt",
         "createdAt",
-        "headSha"
+        "headSha",
+        "liveStepOutcome",
+        "failedSteps"
       ],
       "properties": {
         "id": {
@@ -70,7 +72,11 @@
           "const": "workflow_dispatch"
         },
         "conclusion": {
-          "const": "success"
+          "enum": [
+            "success",
+            "failure"
+          ],
+          "description": "run 的真实结论。失败但 live 步骤成功时，必须走 verdict.waiver，由 admin 签字。"
         },
         "attempt": {
           "type": "integer",
@@ -87,6 +93,32 @@
         "actor": {
           "type": "string",
           "minLength": 1
+        },
+        "liveStepOutcome": {
+          "const": "success",
+          "description": "live 步骤本身的结论；0.5/0.6/0.7 的证据只从这里来。"
+        },
+        "failedSteps": {
+          "type": "array",
+          "description": "失败步骤清单（成功时为空数组）。带 waiver 的失败 run 必须写清哪一步红了、为什么不算产品缺陷。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "reason"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
         }
       }
     },
@@ -258,20 +290,21 @@
         },
         "toolOrder": {
           "const": [
-            "read",
-            "shell",
             "edit",
             "glob",
             "grep",
-            "write",
             "patch",
-            "webfetch",
-            "websearch",
             "question",
+            "read",
+            "shell",
             "skill",
             "subagent",
-            "todowrite"
-          ]
+            "todowrite",
+            "webfetch",
+            "websearch",
+            "write"
+          ],
+          "description": "线上发送顺序（V2_OFFICIAL_TOOL_ORDER，字母序）。资产 JSON 的键序只是取源顺序，不参与线上字节判断。"
         },
         "toolsSha256": {
           "type": "string",
@@ -461,6 +494,30 @@
           "maxItems": 0,
           "items": {
             "type": "string"
+          }
+        },
+        "waiver": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "approvedBy",
+            "reason",
+            "at"
+          ],
+          "properties": {
+            "approvedBy": {
+              "type": "string",
+              "minLength": 1,
+              "description": "只有群 admin（督查）能签。"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            },
+            "at": {
+              "type": "string",
+              "format": "date-time"
+            }
           }
         }
       }

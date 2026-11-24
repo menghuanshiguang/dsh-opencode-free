@@ -76,6 +76,21 @@ const CASES = [
     mutate(d) { d.fingerprint.expectedToolsSha256 = 'f'.repeat(64) },
   },
   {
+    id: 'tool-order-swapped',
+    gate: '0.8',
+    case: '工具顺序换成资产键序（线上是字母序，键序只是取源顺序）',
+    mutate(d) { const t = d.fingerprint.toolOrder; [t[0], t[1]] = [t[1], t[0]] },
+  },
+  {
+    id: 'failure-no-waiver',
+    gate: '0.1',
+    case: 'job 红了却不签豁免（red run 直接当证据）',
+    mutate(d) {
+      d.run.conclusion = 'failure'
+      d.run.failedSteps = [{ name: '13_report the wire capture', reason: 'reporter bug' }]
+    },
+  },
+  {
     id: 'lock-tampered',
     gate: '0.8',
     case: '锁文件里改一个 hex（0.8 只认格式、不认锁就会放行）',

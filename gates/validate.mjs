@@ -27,9 +27,10 @@ const lockFile = (() => {
   return i >= 0 ? argv[i + 1] : undefined
 })()
 
+// 线上顺序 = V2_OFFICIAL_TOOL_ORDER（字母序）。资产 JSON 的键序是取源顺序，不参与线上字节判断。
 const TOOL_ORDER = [
-  'read', 'shell', 'edit', 'glob', 'grep', 'write', 'patch',
-  'webfetch', 'websearch', 'question', 'skill', 'subagent', 'todowrite',
+  'edit', 'glob', 'grep', 'patch', 'question', 'read', 'shell',
+  'skill', 'subagent', 'todowrite', 'webfetch', 'websearch', 'write',
 ]
 const STAGE0_GATES = new Set([
   'P1', 'P2', 'P3',
@@ -80,7 +81,9 @@ if (str(run.url) && int(run.id, 1)) {
 }
 check('run.workflow', str(run.workflow), '必须非空')
 check('run.event', run.event === 'workflow_dispatch', '只接受 workflow_dispatch')
-check('run.conclusion', run.conclusion === 'success', '必须是 success')
+check('run.conclusion', ['success', 'failure'].includes(run.conclusion), '只能是 success 或 failure')
+check('run.liveStepOutcome', run.liveStepOutcome === 'success', 'live 步骤本身必须成功（0.5/0.6/0.7 的证据来源）')
+check('run.failedSteps', Array.isArray(run.failedSteps), '必须是数组（成功时为空）')
 check('run.attempt', int(run.attempt, 1), '必须是 ≥1 的整数')
 check('run.createdAt', typeof run.createdAt === 'string' && !Number.isNaN(Date.parse(run.createdAt)), '必须是 ISO 时间')
 check('run.headSha', hex(run.headSha, 40), '必须是小写 40 位 hex')
@@ -224,6 +227,28 @@ const verdict = doc.verdict ?? {}
 check('verdict', isObject(doc.verdict), '缺失')
 check('verdict.pass', verdict.pass === true, '必须是 true（未通过不许归档）')
 check('verdict.failed', Array.isArray(verdict.failed) && verdict.failed.length === 0, '必须为空数组')
+
+// ---- run 结论与豁免（失败 run 必须由 admin 签字）----
+if (isObject(run)) {
+  const failedSteps = Array.isArray(run.failedSteps) ? run.failedSteps : []
+  failedSteps.forEach((f, i) => {
+    check(`run.failedSteps[${i}]`, isObject(f) && str(f.name) && str(f.reason), '每一格都要有 name 与 reason')
+  })
+  if (run.conclusion === 'success') {
+    check('run.failedSteps', failedSteps.length === 0, '结论 success 时不许有失败步骤')
+    check('verdict.waiver', (doc.verdict ?? {}).waiver === undefined, 'success 的 run 不需要豁免')
+  }
+  if (run.conclusion === 'failure') {
+    check('run.failedSteps', failedSteps.length >= 1, '失败 run 必须写清哪一步红了')
+    const waived = (doc.verdict ?? {}).waiver
+    check('verdict.waiver', isObject(waived), '失败 run 必须由 admin 签字豁免（approvedBy + reason + at）')
+    if (isObject(waived)) {
+      check('verdict.waiver.approvedBy', str(waived.approvedBy), '必须写明谁签的')
+      check('verdict.waiver.reason', str(waived.reason), '必须写豁免理由')
+      check('verdict.waiver.at', typeof waived.at === 'string' && !Number.isNaN(Date.parse(waived.at)), '必须是 ISO 时间')
+    }
+  }
+}
 
 // ---- negativeTests（每条闸门都要有一次反向证据）----
 const negTests = doc.negativeTests
