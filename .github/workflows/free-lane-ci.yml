@@ -244,10 +244,14 @@ jobs:
         run: npm run typecheck
 
       - name: rehearsal assertions bite (postCount is a number, gates are parsed)
-        run: node gates/check-rehearsal.mjs --self-test | tee rehearsal.txt
+        run: |
+          set -euo pipefail
+          node gates/check-rehearsal.mjs --self-test | tee rehearsal.txt
 
       - name: a live product must archive (fixture; schema untouched)
-        run: node gates/check-live-artifact.mjs | tee live-artifact.txt
+        run: |
+          set -euo pipefail
+          node gates/check-live-artifact.mjs | tee live-artifact.txt
 
       - name: gateway contract (the verifier's bench, under the guard)
         run: |

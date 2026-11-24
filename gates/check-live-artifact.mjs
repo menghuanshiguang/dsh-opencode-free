@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const ROOT = resolve(process.cwd())
+const PRINT = process.argv.includes('--print-command')
 const FIX = join(ROOT, 'gates/fixtures/live-product')
 const tmp = mkdtempSync(join(tmpdir(), 'live-artifact-'))
 const out1 = join(tmp, 'a.json')
@@ -21,6 +22,28 @@ const out2 = join(tmp, 'b.json')
 const run = (args) => {
   const r = spawnSync(process.execPath, args, { cwd: ROOT, encoding: 'utf8' })
   return { code: r.status ?? 1, stdout: String(r.stdout ?? ''), stderr: String(r.stderr ?? '') }
+}
+
+// 把真正要跑的归档命令原样打出来：路径、七个必填输入、--stage 4。谁要接进 live 就照抄，
+// 不再靠转述。产物目录是解包后的 artifact；artifacts-json 只有在 upload-artifact 之后才存在，
+// 所以这一步在 run 里的位置只能在上传之后。
+if (PRINT) {
+  const cmd = [
+    'node gates/from-artifact.mjs',
+    `--dir <解包后的 artifact 目录>`,
+    `--run-json <本次 run 的 API JSON>`,
+    `--jobs-json <本次 run 的 jobs API JSON>`,
+    `--artifacts-json <本次 run 的 artifacts API JSON>`,
+    `--repo-json <仓库 API JSON>`,
+    `--preconditions <gates/check-preconditions.mjs 的输出>`,
+    `--negative-tests <gates/selftest.mjs 的输出>`,
+    `--lock docs/fingerprint-baseline.json`,
+    `--stage 4`,
+    `--out <archive.json>`,
+  ].join('\\\n  ')
+  console.log(`# 真实跑法（夹具里跑通的同一条命令）：\n${cmd}`)
+  console.log('# 产出后必须过：node gates/validate.mjs <archive.json> --stage 4 --lock docs/fingerprint-baseline.json')
+  process.exit(0)
 }
 
 const archiveArgs = (dir, out) => [
