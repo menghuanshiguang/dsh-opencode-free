@@ -21,7 +21,7 @@
 // is asserted is which artifact the script asks for and which layer it settles
 // on.
 
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -140,16 +140,35 @@ function seal(port, out) {
     `export GITHUB_REPOSITORY=${q('o/r')}`,
     `exec bash ${q(SCRIPT)} ${q(RUN_ID)} --out ${q(out)}`,
   ].join('; ')
-  // timeout: a child that never returns must fail this case in a minute, not
-  // sit on the CI job's 15-minute budget until the whole run is cancelled. That
-  // is what happened once; the case had no ceiling of its own.
-  const result = spawnSync('sh', ['-c', command], { cwd: ROOT, encoding: 'utf8', timeout: 20_000 })
-  return {
-    status: result.status,
-    timedOut: result.error?.code === 'ETIMEDOUT' || result.signal === 'SIGTERM',
-    stdout: result.stdout ?? '',
-    stderr: result.stderr ?? '',
-  }
+  // `spawn`, not `spawnSync`, and that is not a style preference.
+  //
+  // The stand-in API in this file runs on this process's event loop. A blocking
+  // `spawnSync` stops that loop, so the child's request to the stand-in can
+  // never be answered while the parent waits for the child: a deadlock that
+  // resolves only by hitting the ceiling below. On a machine where loopback is
+  // unreachable the child failed instantly and the deadlock never appeared; in
+  // CI, where loopback works, all five cases sat at the ceiling for exactly
+  // that reason. Awaiting an async child keeps the loop free to serve.
+  return new Promise(resolveCase => {
+    const child = spawn('sh', ['-c', command], { cwd: ROOT })
+    let stdout = ''
+    let stderr = ''
+    let timedOut = false
+    const ceiling = setTimeout(() => {
+      timedOut = true
+      child.kill('SIGKILL')
+    }, 20_000)
+    child.stdout.on('data', chunk => { stdout += chunk })
+    child.stderr.on('data', chunk => { stderr += chunk })
+    child.on('error', error => {
+      clearTimeout(ceiling)
+      resolveCase({ status: null, timedOut, stdout, stderr: `${stderr}${error.message}` })
+    })
+    child.on('close', status => {
+      clearTimeout(ceiling)
+      resolveCase({ status, timedOut: timedOut || status === null, stdout, stderr })
+    })
+  })
 }
 
 const artifact = (id, name) => ({
@@ -167,7 +186,7 @@ const zipRequests = seen => seen.filter(url => url.startsWith('/repos/o/r/action
 test('online pick: a list holding archive- and live- fetches live-, never archive-', { timeout: 30_000 }, async () => {
   const api = await startFakeApi({ artifacts: bothUploads(), zipPath: makeZip('nested.zip', payload('_temp/')) })
   try {
-    const run = seal(api.port, join(scratch, 'case-nested'))
+    const run = await seal(api.port, join(scratch, 'case-nested'))
     assert.equal(run.timedOut, false, `the script did not finish within 20s:\n${run.stdout}\n${run.stderr}`)
     const inputs = run.stdout.split('\n').find(l => l.startsWith('sealed inputs:'))
     assert.ok(
@@ -191,7 +210,7 @@ test('online pick: a list holding archive- and live- fetches live-, never archiv
 test('online pick: a flat artifact resolves to the top rather than assuming a subdirectory', { timeout: 30_000 }, async () => {
   const api = await startFakeApi({ artifacts: bothUploads(), zipPath: makeZip('flat.zip', payload('')) })
   try {
-    const run = seal(api.port, join(scratch, 'case-flat'))
+    const run = await seal(api.port, join(scratch, 'case-flat'))
     assert.equal(run.timedOut, false, `the script did not finish within 20s:\n${run.stdout}\n${run.stderr}`)
     assert.match(run.stdout, /sealed payload layer: \(top\)/, `a flat artifact should resolve to the top:\n${run.stdout}`)
     assert.doesNotMatch(run.stderr, /深度 ≤3 以内找不到 live\.json/, `it failed to see the flat payload:\n${run.stderr}`)
@@ -208,7 +227,7 @@ test('online pick: a list holding only archive- is refused, and nothing is downl
     zipPath: makeZip('unused.zip', payload('_temp/')),
   })
   try {
-    const run = seal(api.port, join(scratch, 'case-archive-only'))
+    const run = await seal(api.port, join(scratch, 'case-archive-only'))
     assert.equal(run.timedOut, false, `the script did not finish within 20s:\n${run.stderr}`)
     assert.equal(run.status, 1, `expected 1, got ${run.status}\n${run.stderr}`)
     assert.match(run.stderr, new RegExp(`live-${RUN_ID}`), 'the refusal must name the name it wanted')
@@ -225,7 +244,7 @@ test('online pick: two artifacts under the same live- name are refused rather th
     zipPath: makeZip('dup.zip', payload('_temp/')),
   })
   try {
-    const run = seal(api.port, join(scratch, 'case-two-live'))
+    const run = await seal(api.port, join(scratch, 'case-two-live'))
     assert.equal(run.timedOut, false, `the script did not finish within 20s:\n${run.stderr}`)
     assert.equal(run.status, 1, `expected 1, got ${run.status}\n${run.stderr}`)
     assert.match(run.stderr, /found 2/, 'the refusal must say how many matched')
@@ -247,7 +266,7 @@ test('online seal: it refuses a run that is not a completed success before it lo
     server.listen(0, '127.0.0.1', resolvePromise)
   })
   try {
-    const run = seal(server.address().port, join(scratch, 'case-running'))
+    const run = await seal(server.address().port, join(scratch, 'case-running'))
     assert.equal(run.timedOut, false, `the script did not finish within 20s:\n${run.stderr}`)
     assert.equal(run.status, 1, `expected 1, got ${run.status}\n${run.stderr}`)
     assert.match(run.stderr, /conclusion=null/, 'the refusal must quote the conclusion it found')
