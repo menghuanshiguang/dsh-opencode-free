@@ -2,223 +2,184 @@
 
 OpenCode 免费车道独立版：逐字节复刻官方 v2.2.3 客户端请求体，直连 opencode.ai 免费车道，对外只暴露一个本地 OpenAI 兼容网关。独立包，不是 DSH 插件：插件外壳（`index.js`、`client.js`、`adapters`）按阶段 2 的剥离判据不保留。
 
-## License
+## 许可证
 
-MIT. This repository is derived from
+MIT。本仓库派生自
 [Ebony-Vinyl/dsh-our-free-model](https://github.com/Ebony-Vinyl/dsh-our-free-model)
-(commit `f29116ba`, used as a read-only reference), which is itself MIT licensed.
+（commit `f29116ba`，仅作只读参考），上游本身亦为 MIT 许可。
 
-- `LICENSE` carries the upstream text verbatim, including its third-party notices
-  (models.dev, opencode, RTK, 9router) and the derivative note, plus one added
-  line: `Copyright (c) 2026 menghuanshiguang (dsh-opencode-free modifications)`.
-- GitHub reports `spdx_id: NOASSERTION` for this repository because that LICENSE
-  is a composite text (MIT plus four third-party notices plus a derivative
-  paragraph), which its detector does not classify as plain MIT. The grant is
-  still MIT, as stated here and in `LICENSE`.
+- `LICENSE` 逐字保留上游原文，含其第三方声明
+  （models.dev、opencode、RTK、9router）与派生说明，并另加一行：
+  `Copyright (c) 2026 menghuanshiguang (dsh-opencode-free modifications)`。
+- GitHub 对本仓库报 `spdx_id: NOASSERTION`，原因是该 LICENSE 是一份合成文本
+  （MIT 加四条第三方声明再加一段派生说明），其检测器不把它归类为纯 MIT。
+  授权本身仍是 MIT，如此处与 `LICENSE` 所述。
 
-## What the lane is
+## 这条车道是什么
 
-Only the official-OC free lane and a local OpenAI-compatible gateway are kept.
-The upstream's ten-channel routing, EAC, and admin pages are removed, with no
-switch and no dead branch left behind.
+只保留官方 OC 免费车道与一个本地 OpenAI 兼容网关。上游的十账号渠道路由、
+EAC 与管理页均已删除，不留开关、不留死代码分支。
 
-Live requests leave from GitHub Actions (`ubuntu-latest`) through the production
-Bun worker; the node transport is a diagnostic fallback only and is never
-acceptance evidence.
+live 请求一律从 GitHub Actions（`ubuntu-latest`）经生产 Bun worker 发出；
+node 传输只是诊断用的兜底，永远不作为验收证据。
 
-## Use
+## 用法
 
 ```bash
-npm install                       # only for the typecheck; the runtime has no dependencies
+npm install                       # 仅类型检查需要；运行期没有任何依赖
 node -e "import('./src/gateway.js').then(async m => {
   const g = await m.startGateway({ port: 18787 })
   console.log(g.url)
 })"
 ```
 
-Two routes, and nothing else:
+两条路由，别的一概没有：
 
-| Route | What it does |
+| 路由 | 做什么 |
 | --- | --- |
-| `GET /v1/models` | the free-lane ids, read from the live listing at request time (never typed in here) |
-| `POST /v1/chat/completions` | one free-lane turn; `stream: true` relays the upstream SSE frames |
+| `GET /v1/models` | 免费车道的 id，在请求时刻从线上列表读出（绝不写死在这里） |
+| `POST /v1/chat/completions` | 一次免费车道往返；`stream: true` 时原样转发上游 SSE 帧 |
 
-Any other path answers 404 and any other method 405 — there is no admin page,
-no statistics route, no authentication, no billing and no rate limiter, because
-there is nothing here to administer. A model id that is not a free-lane id (it
-does not end in `-free`) is refused locally with 400, so a paid request can
-never be sent by mistake.
+任何其他路径回 404、其他方法回 405 —— 没有管理页、没有统计路由、没有鉴权、
+没有计费、没有限流，因为这里没有任何东西需要管理。不以 `-free` 结尾的模型 id
+在本地就被 400 拒绝，所以付费请求不可能被误发出去。
 
-The request body that leaves is the one `src/upstream.js` shapes: the official
-v2.2.3 system prompt, the 13 tool contracts in the lane's wire order, the
-`x-opencode-*` identity and a real-timestamp session id. Forwarding the
-caller's JSON unchanged would be refused by the free tier (403 FreeTierError /
-429), which is why shaping is not optional.
+出站的请求体就是 `src/upstream.js` 整形出的那一份：官方 v2.2.3 的 system prompt、
+13 条工具契约按车道的线上顺序、`x-opencode-*` 身份，以及带真实时间戳的 session id。
+把调用方的 JSON 原样转出去会被免费层拒绝（403 FreeTierError / 429），
+所以整形不是可选项。
 
-## Requirements and limits
+## 环境要求与限制
 
-**Bun is a prerequisite for the lane.** The gateway itself is a Node `>=20`
-`node:http` server and the runtime has no dependencies, but every request that
-leaves for `opencode.ai/inference/*` — the completions and the model listing
-alike — goes through the production Bun worker in `src/bun-fetch.js`, which is
-the released client's own fetch stack. With no `bun` executable to be found
-(`$OUR_FREE_MODEL_BUN`, then `~/.bun/bin/bun`, then `bun` on `PATH`) a lane
-request fails with
+**Bun 是这条车道的前置。** 网关本身是一个 Node `>=20` 的 `node:http` 服务，
+运行期没有依赖，但每一个发往 `opencode.ai/inference/*` 的请求——补全与模型列表
+都一样——都经过 `src/bun-fetch.js` 里的生产 Bun worker，那是发布版客户端自己的
+fetch 栈。找不到 `bun` 可执行文件时（先找 `$OUR_FREE_MODEL_BUN`，再找
+`~/.bun/bin/bun`，再找 `PATH` 上的 `bun`），车道请求会以
 
 ```
 Bun executable not found; set OUR_FREE_MODEL_BUN to a native executable.
 ```
 
-and it is not retried on the Node transport. That path exists as a diagnostic,
-never as acceptance evidence: a Node-only run has never been what this
-repository calls a pass.
+失败，并且不会回落到 Node 传输上重试。那条路径只作诊断存在，永远不是验收证据：
+只有 Node 的运行从来不是本仓库所说的通过。
 
-**Only the free lane, with no credential anywhere.** There is no account to add,
-no key to set, no channel to choose. The lane is reached anonymously, the
-request body is the official released shape, and a model id without the `-free`
-suffix is refused locally with 400 — so a paid request cannot be sent by
-mistake, and there is no configuration that would let one be.
+**只走免费车道，任何地方都没有凭据。** 没有账号可加、没有密钥要设、没有渠道可选。
+车道是匿名到达的，请求体是官方发布版的形状，不以 `-free` 结尾的模型 id 在本地
+就被 400 拒绝——付费请求不可能误发，也没有任何配置能让它被发出去。
 
-**One request per run, one run at a time.** `free-lane-live` is
-`workflow_dispatch` only. `confirm` must be exactly `true`, a model id holding a
-space or comma is refused ("exactly one model per run"), and the id must match
-`^[a-z0-9][a-z0-9.-]*-free$`. The run refuses to start while any other live run
-is `queued`, `in_progress`, `waiting`, `requested` or `pending`, and holds a
-900-second cooldown after a run whose `live request` step actually ran — a run
-that stopped before that step spent nothing and does not start the cooldown.
-The 900 seconds is a floor, not the working rule: two live runs are kept at
-least an hour apart, and "the workflow would have allowed it" has never been a
-reason to dispatch one.
+**一次一条请求，同一时刻一发。** `free-lane-live` 只允许 `workflow_dispatch`。
+`confirm` 必须恰为 `true`，含空格或逗号的模型 id 会被拒绝（"exactly one model per
+run"），id 必须匹配 `^[a-z0-9][a-z0-9.-]*-free$`。只要还有另一个 live run 处于
+`queued`、`in_progress`、`waiting`、`requested` 或 `pending`，它拒绝启动；并且在
+`live request` 这一步真的跑过的 run 之后保持 900 秒冷却——在那一步之前就停下的
+run 什么也没花，不触发冷却。900 秒是地板，不是工作规则：两次 live 之间至少隔
+一小时，而"workflow 允许"从来不是派发它的理由。
 
-**The year inside the `websearch` description is rendered per request**, the way
-the official client renders it. With the clock in the asset's own year (2026) the
-product reproduces the asset byte for byte; in any other year it renders that
-year, because that is what the released client sends. The consequence is worth
-stating before someone rediscovers it the hard way: `toolsSha256` in
-`docs/fingerprint-baseline.json` is comparable as a lock **only inside that
-year**. In 2027 a live run's `toolsSha256` will differ from the lock and gate 0.8
-will say so, while not one byte of the fingerprint has moved — the calendar did.
-`acceptance/year-clock-test.mjs --clock <year>` is the gate for that behaviour
-and is run with a clock, never with today's date alone.
+**`websearch` 描述里的年份是按请求时刻渲染的**，与官方客户端一致。当时钟落在资产
+自己的年份（2026）时，本产品逐字节复现资产；其他年份则渲染当年，因为发布的客户端
+发出去的就是当年。这个后果值得事先说清，免得有人用更贵的方式重新发现：
+`docs/fingerprint-baseline.json` 里的 `toolsSha256` **只在资产当年内**才可作锁值
+比对。到 2027 年，一次 live 的 `toolsSha256` 会与锁值不等，gate 0.8 会如实报红，
+而指纹一个字节都没动——动的是日历。
+`acceptance/year-clock-test.mjs --clock <year>` 是这道行为的闸门，永远带着时钟跑，
+不单凭今天的日期。
 
-**Derived code travels with its notice.** This package is MIT, derived from
-`Ebony-Vinyl/dsh-our-free-model` at `f29116ba`; `LICENSE` carries the upstream
-text and its third-party notices, and it ships with the package (`files` in
-`package.json`) rather than living only in the repository.
+**派生代码随它的声明同行。** 本包是 MIT，派生自
+`Ebony-Vinyl/dsh-our-free-model` 的 `f29116ba`；`LICENSE` 带上游原文与其第三方
+声明，并且随包发布（`package.json` 的 `files`），不只是留在仓库里。
 
-**The year is rendered when the request is built, as the official client
-renders it.** The `websearch` tool description carries `The current year is
-<year>.`; the shipped body substitutes the year of the moment the request is
-assembled (`src/o2a.js`) rather than freezing the one in the assets. So
-`docs/fingerprint-baseline.json` holds the `toolsSha256` of the assets' own year
-(2026): in that year the shipped body reproduces the assets byte for byte, in
-any later year it renders that year exactly as the official template renders it,
-and the recorded lock value is only comparable within the assets' year. A live
-run in 2027 whose `toolsSha256` differs from the lock has therefore not broken
-the fingerprint — the calendar moved, which is a different failure from a body
-that no longer matches the official client. `node
-acceptance/year-clock-test.mjs --clock <year>` is the dead gate on that
-behaviour: `--clock 2027-01-01` must exit 0, and it fails both when the
-description freezes at the assets' year again and when the render stops
-equalling the official template's render for the injected clock.
+**年份在构建请求的那一刻渲染，与官方客户端的渲染方式一致。**
+`websearch` 工具描述里带着 `The current year is <year>.`；出站体替换成请求组装
+那一刻的年份（`src/o2a.js`），而不是冻结资产里的那一个。所以
+`docs/fingerprint-baseline.json` 记录的是资产当年（2026）的 `toolsSha256`：在那一年
+出站体逐字节复现资产，在任何更晚的年份则渲染当年、且与官方模板该年的渲染相等，
+而记录下来的锁值只在资产当年内可比。因此 2027 年的一次 live 若 `toolsSha256`
+与锁值不等，指纹并没有坏——是日历翻页了，这与"请求体已不再与官方客户端一致"
+是两种不同的失败。`node acceptance/year-clock-test.mjs --clock <year>` 是这道
+行为的死门：`--clock 2027-01-01` 必须 exit 0，而描述重新冻结回资产年份、或渲染
+不再等于官方模板对注入时钟的渲染，两者都会让它红。
 
-## Evidence has to be able to go red
+## 证据必须能变红
 
-Every assertion this repository makes about a zero, an equality or a single
-request ships with a negative case that turns it red. Without one, a check that
-cannot fail is decoration, and the decoy looks exactly like the pass.
+本仓库对任何一个零、一处相等、一次请求作出的断言，都随附一个能让它变红的反例。
+没有反例的检查只是装饰，而诱饵看起来和通过一模一样。
 
-The rule was written after three real ones were caught in this repository:
+这条规矩是在本仓库抓到三个真例之后写下的：
 
-| What it claimed | Why it could never fail | What makes it fail now |
+| 它声称什么 | 为什么它不可能失败 | 现在什么让它失败 |
 | --- | --- | --- |
-| "no off-loopback request was attempted" | the guard writes to **stderr**, the step teed only stdout, so the `grep` never saw the line | `2>&1` on the tee, plus a suite count that only counts the guard marker, and a deliberate outbound attempt in the fixtures |
-| "5 suites ran" | the counter matched `^=== `, which the suites print themselves as titles | the runner prints `### suite: <name>` and the counter matches only that |
-| "transport is the production Bun worker" | `transport=bun` was an inference from configuration, true with zero requests sent | gate 0.3 also requires `postCount>=1`, so a zero-request run fails it — the dry-run rehearsal (`45335463823`) exists to prove that |
+| "没有尝试任何 loopback 之外的请求" | 守卫写 **stderr**，而这一步只 tee 了 stdout，`grep` 从来没见过那一行 | tee 上加 `2>&1`，加上只数守卫标记的套件计数，以及夹具里一次故意发出的出站尝试 |
+| "跑了 5 个套件" | 计数器匹配 `^=== `，而那是套件自己打印的标题 | 运行器打印 `### suite: <name>`，计数器只匹配这个 |
+| "transport 是生产 Bun worker" | `transport=bun` 是从配置推断的，零请求发出时同样成立 | gate 0.3 还要求 `postCount>=1`，所以零请求的 run 过不了它——dry-run 演练（`45335463823`）就是用来证明这点的 |
 
-The same rule applies to the contract gate: `scripts/tests/gateway.test.mjs`
-asserts the routes that must not exist, `scripts/check-extraction.mjs` is proven
-against six bad inputs (an extra export, a `/stats` route, one changed byte in a
-verbatim file, an excluded path imported back, a commented-out route, an
-`if (false)` branch), and the offline count is demonstrated with a request that
-must be blocked.
+同一条规矩适用于契约闸门：`scripts/tests/gateway.test.mjs` 断言那些不该存在的
+路由，`scripts/check-extraction.mjs` 由六个坏输入证明（多一个导出、一条 `/stats`
+路由、verbatim 文件里改一个字节、被排除路径又被引回来、注释掉一条路由、一个
+`if (false)` 分支），而离线计数用一个必须被拦下的请求来演示。
 
-## The extraction gate
+## 剥离闸门
 
-`node scripts/check-extraction.mjs` is the stage-2 gate, and it exits 0 only
-when all four families hold:
+`node scripts/check-extraction.mjs` 是阶段 2 的闸门，只有四族全部成立时它才 exit 0：
 
-1. **import set** — every imported upstream file still hashes to the blob the
-   pin names, or is declared adapted/removed in `docs/adaptations.json` with a
-   reason (`899 = 7 imported + 892 excluded`, disjoint). The 7 imported split
-   `3 verbatim + 3 adapted + 1 removed`, and `src/` holds those 6 plus
-   `1 added` (`src/gateway.js`, this package's own entry) — eight declared
-   paths, seven modules on disk, because the removal is gone by definition.
-   The counts are not prose: `scripts/check-extraction.mjs` compares
-   `gates/extraction-whitelist.json`'s `verbatim`/`adapted`/`removed`/`added`
-   lists against `docs/adaptations.json` and the import set in both
-   directions, so a path called byte-identical in one place and adapted in the
-   other goes red;
-2. **excluded reach** — no shipped module imports an excluded path, which is
-   the machine form of "no account channels were carried along";
-3. **public surface** — the entry exports exactly `{createGateway,
-   startGateway}` and `package.json` exports only `"."`;
-4. **no leftovers** — no admin/statistics route, credential-shaped config name,
-   channel provider or EAC identifier in the files this package authored; no
-   dead file inside `src/`; no commented-out code and no `if (false)`.
+1. **导入集** —— 每个被导入的上游文件仍然与 pin 指定的 blob 同哈希，或在
+   `docs/adaptations.json` 里连同理由申报为 adapted/removed
+   （`899 = 7 imported + 892 excluded`，互不相交）。这 7 个导入拆成
+   `3 verbatim + 3 adapted + 1 removed`，`src/` 里是其中 6 个再加
+   `1 added`（`src/gateway.js`，本包自己的入口）——声明的路径八条，磁盘上的
+   模块七个，因为那个删除按定义已经不在。
+   这些计数不是散文：`scripts/check-extraction.mjs` 把
+   `gates/extraction-whitelist.json` 的 `verbatim`/`adapted`/`removed`/`added`
+   四个列表与 `docs/adaptations.json` 及导入集双向比对，所以一处在说逐字节未动、
+   另一处在说改写过的路径，会当场变红；
+2. **排除可达性** —— 没有任何出站模块导入被排除的路径，这是"没有把账号渠道
+   一起带过来"的机器形式；
+3. **公开面** —— 入口恰好导出 `{createGateway, startGateway}`，`package.json`
+   只导出 `"."`；
+4. **不留残迹** —— 本包自己写的文件里没有管理/统计路由、没有凭据形状的配置名、
+   没有渠道 provider、没有 EAC 标识符；`src/` 里没有死文件；没有注释掉的代码、
+   没有 `if (false)`。
 
-Exit codes: `0` pass, `1` fail (each hit listed), `2` the checker itself could
-not run. Treating only `1` as failure would let a broken run look green.
+退出码：`0` 通过，`1` 失败（逐条列出命中），`2` 检查器本身跑不起来。只把 `1`
+当失败的做法会让一次坏掉的运行看起来是绿的。
 
-`npm test` runs the three offline suites: the contract hash, the route surface,
-and the stand-in contract (a loopback server that records the outbound body, so
-"the gateway adds nothing" is asserted as a sha256 equality rather than promised).
+`npm test` 跑三个离线套件：契约哈希、路由面、以及替身契约（一个记录出站体的
+loopback 服务，于是"网关不添加任何东西"被断言成一次 sha256 相等，而不是一句承诺）。
 
-`node scripts/live-test.mjs` without `--live` prints
-`Skipped: pass --live to send an actual request.` and sends nothing; CI runs it
-exactly that way, under the network guard, and counts the off-loopback attempts
-(it expects 0). `npm run typecheck` checks the files
-this package authored (they carry `// @ts-check`); the four upstream files are
-covered by their pinned blob shas instead of being re-typed, because editing
-them to satisfy a checker would change the fingerprint this lane depends on.
+不带 `--live` 的 `node scripts/live-test.mjs` 打印
+`Skipped: pass --live to send an actual request.` 并且什么也不发；CI 就是这么跑
+它的，在网络守卫之下，并统计出站到 loopback 之外的尝试次数（期望为 0）。
+`npm run typecheck` 检查本包自己写的文件（它们带 `// @ts-check`）；那四个上游文件
+由它们各自的 blob sha 覆盖，而不是重新做类型检查，因为为了让检查器满意而改它们，
+就会改变这条车道赖以成立的指纹。
 
-## Verification
+## 验证
 
-`free-lane-ci` runs on push and pull request and touches the inference host with
-zero bytes: `tools/guard-offline.mjs` refuses every off-loopback request made by
-a test process, and the run prints whether anything was attempted.
+`free-lane-ci` 在 push 与 pull request 上跑，对推理主机零字节：`tools/guard-offline.mjs`
+拒绝测试进程发出的每一个 loopback 之外的请求，而运行会把是否尝试过打印出来。
 
-- `node tools/contract-check.mjs <model>` — the 13 tool contracts and the system
-  prompt against the pinned assets, plus `toolsSha256`.
-- `node tools/gates-selftest.mjs` — the gate validator against one perfect run and
-  six broken ones.
-- `node gates/selftest.mjs` and `node gates/validate.mjs` — the archive schema and
-  its negative cases.
-- `node tools/gh-anon-shim.mjs` installed as `gh` lets the pinned upstream asset
-  fetcher read `raw.githubusercontent.com` without any credential; the blob SHAs
-  are recomputed locally and checked against the provenance table.
+- `node tools/contract-check.mjs <model>` —— 13 条工具契约与 system prompt 对照
+  pin 住的资产，外加 `toolsSha256`。
+- `node tools/gates-selftest.mjs` —— 闸门校验器对一个完美 run 与六个坏 run 的判定。
+- `node gates/selftest.mjs` 与 `node gates/validate.mjs` —— 档案 schema 及其反例。
+- 把 `node tools/gh-anon-shim.mjs` 装成 `gh`，让那个 pin 住上游资产的取源器不带
+  任何凭据就能读 `raw.githubusercontent.com`；blob SHA 在本地重算并与来源表比对。
 
-`free-lane-live` is `workflow_dispatch` only, one model, one request, no retry.
-It refuses a second run in flight, records the egress IP and country, requires
-the production Bun transport, and asserts the fingerprint baseline before it
-spends anything. Its artifacts carry `gates.json`, the wire capture, and the raw
-upstream response.
+`free-lane-live` 只用 `workflow_dispatch`，一个模型、一次请求、不重试。它拒绝
+同时存在第二个 run，记录出口 IP 与国家，要求生产 Bun 传输，并在花任何额度之前
+断言指纹基线。它的产物带 `gates.json`、线上抓包，以及上游原始响应。
 
-### The record comes in two forms
+### 档案有两种形态
 
-A record written *inside* the run that it describes cannot know how that run
-ended — `run.conclusion` is still `null` at that moment, and `failedSteps` is
-not `[]` (nothing has failed yet, but nothing has been skipped either). So the
-in-run archive says `conclusion: null`, `status: in_progress`, `failedSteps:
-null`: it proves the request layer and the gates, and it does not claim the
-outcome. `scripts/archive-live-run.sh` produces it.
+写在它所描述的那条 run **内部**的档案，无法知道那条 run 是怎么结束的——那一刻
+`run.conclusion` 还是 `null`，而 `failedSteps` 也不是 `[]`（还没有失败，但也还
+没有跳过）。所以 run 内那份档案写 `conclusion: null`、`status: in_progress`、
+`failedSteps: null`：它证明请求层与闸门，不声称结局。
+`scripts/archive-live-run.sh` 产出的就是这一份。
 
-After the run has finished, `scripts/seal-live-run.sh <run-id> --out <dir>`
-produces the second form through the same archive code, and only that one is
-allowed to say `conclusion: success` — it refuses a run whose conclusion is not
-`success` and whose status is not `completed`. It binds the artifact by exact
-name, `live-<run-id>`: a second artifact named `archive-<run-id>` also contains
-the run id, and a selector that matched on "the name contains the id" picked
-whichever came first in the API's list, which bound the sealed record to the
-wrong artifact while every field still validated. Zero matches or two matches
-are both refused; there is no fallback to the list order.
+run 结束之后，`scripts/seal-live-run.sh <run-id> --out <dir>` 用同一份归档代码
+产出第二种形态，只有这一份才允许写 `conclusion: success`——它拒绝 conclusion 不是
+`success`、status 不是 `completed` 的 run。它按精确的 `live-<run-id>` 名绑定产物：
+同一名下还有一件 `archive-<run-id>` 也含 run id，而按"名字里含 id"选件的做法会取
+API 列表里靠前的那个，于是封存档案绑到了错的产物上，而每个字段仍然通过校验。
+零命中与两命中都被拒绝；不存在回落到列表顺序的做法。
