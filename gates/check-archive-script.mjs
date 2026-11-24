@@ -15,7 +15,7 @@
 //
 // 脚本还不存在时本检查 exit 2：失败关闭，不许因为「还没实现」而静默通过。
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -85,16 +85,32 @@ const missing = run([SCRIPT, '--dir', noProduct, '--out', join(tmp, 'x.json'),
 if (missing.code === 0) failures.push('产物目录缺 gates.flat.json 仍然 rc=0：产物存在性没有断言')
 say(missing.code !== 0, 'missing-product', `rc=${missing.code}`)
 
-// 5) 浅历史 → 必须红（深度 1 的克隆里跑同一个脚本）
+// 5) 浅历史 → 必须红
+//
+// 真跑 `git clone --depth 1 file://<repo>`；这台机器的 git 不支持本地传输上的浅克隆，
+// 那就退回同一状态的克隆（完整克隆 + .git/shallow 标记 = 浅克隆留下的那个文件），
+// 并且先用 `git rev-parse --is-shallow-repository` 证明确实是浅的，再说它红了。
+// 两条路断言的是同一件事：浅检出里脚本必须拒绝归档。
 const shallow = join(tmp, 'shallow')
-spawnSync('git', ['clone', '--depth', '1', `file://${ROOT}`, shallow], { encoding: 'utf8' })
+const depth1 = spawnSync('git', ['clone', '--depth', '1', `file://${ROOT}`, shallow], { encoding: 'utf8' })
+let how = 'clone --depth 1'
+if (!existsSync(join(shallow, '.git'))) {
+  rmSync(shallow, { recursive: true, force: true })
+  const full = spawnSync('git', ['clone', `file://${ROOT}`, shallow], { encoding: 'utf8' })
+  if (full.status !== 0) failures.push(`浅历史这条建不出检出来：${(full.stderr ?? '').trim().split('\n').slice(-1)[0]}`)
+  const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: shallow, encoding: 'utf8' }).stdout ?? ''
+  if (existsSync(join(shallow, '.git'))) writeFileSync(join(shallow, '.git', 'shallow'), head)
+  how = 'simulated (local git refuses shallow over file://)'
+}
 if (!existsSync(join(shallow, 'scripts/archive-live-run.sh'))) {
-  failures.push('浅克隆里没有脚本，无法判「浅历史必须红」——这条不许静默跳过')
+  failures.push('浅检出里没有脚本，无法判「浅历史必须红」——这条不许静默跳过')
 } else {
+  const isShallow = (spawnSync('git', ['rev-parse', '--is-shallow-repository'], { cwd: shallow, encoding: 'utf8' }).stdout ?? '').trim()
+  if (isShallow !== 'true') failures.push(`这一份不是浅检出（is-shallow-repository=${isShallow}），判「浅历史必须红」就没有意义`)
   const shallowRun = run(['scripts/archive-live-run.sh', '--dir', art, '--out', join(tmp, 'y.json'),
     '--run-json', sidecars[0], '--jobs-json', sidecars[1], '--artifacts-json', sidecars[2], '--repo-json', sidecars[3]], shallow)
-  if (shallowRun.code === 0) failures.push('浅历史（--depth 1）下仍然 rc=0：P3 等于拿一个提交充数')
-  say(shallowRun.code !== 0, 'shallow-history', `rc=${shallowRun.code}`)
+  if (shallowRun.code === 0) failures.push('浅历史下仍然 rc=0：P3 等于拿一个提交充数')
+  say(shallowRun.code !== 0, 'shallow-history', `rc=${shallowRun.code} is-shallow=${isShallow} ${how}`)
 }
 
 rmSync(tmp, { recursive: true, force: true })
