@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Local state directory for the free lane.
  *

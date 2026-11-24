@@ -1,3 +1,4 @@
+// @ts-check
 // The stage-2 extraction gate: the package keeps the free lane and a local
 // OpenAI-compatible gateway, and nothing else.
 //
@@ -232,6 +233,7 @@ const WRITTEN = new Set([
 ])
 const SCANNERS = new Set(['scripts/check-extraction.mjs'])
 
+/** @type {Array<[RegExp, string]>} */
 const MARKERS = [
   [/\bsrc\/accounts\b/, 'an account-channel path'],
   [/\b(?:ADMIN_TOKEN|SIGNING_SECRETS|UPSTREAM_API_KEY)\b/, 'a credential-shaped config name'],

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * The OpenCode free lane, behind a local OpenAI-compatible gateway.
  *

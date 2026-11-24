@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Transport for the free lane.
  *

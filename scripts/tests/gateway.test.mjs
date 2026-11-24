@@ -1,3 +1,4 @@
+// @ts-check
 // The gateway's whole surface: two routes, no admin, no statistics, no paid request.
 //
 // The lane is injected, so nothing here reaches the network or spends quota. The

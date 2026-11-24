@@ -1,3 +1,4 @@
+// @ts-check
 // The two kept groups must still be the two kept groups on the wire.
 //
 // The lock in docs/fingerprint-baseline.json was produced by the harness on

@@ -74,6 +74,11 @@ when all four families hold:
 Exit codes: `0` pass, `1` fail (each hit listed), `2` the checker itself could
 not run. Treating only `1` as failure would let a broken run look green.
 
+`npm test` runs the two offline suites. `npm run typecheck` checks the files
+this package authored (they carry `// @ts-check`); the four upstream files are
+covered by their pinned blob shas instead of being re-typed, because editing
+them to satisfy a checker would change the fingerprint this lane depends on.
+
 ## Verification
 
 `free-lane-ci` runs on push and pull request and touches the inference host with
