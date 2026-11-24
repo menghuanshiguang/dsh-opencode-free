@@ -98,11 +98,13 @@ function startFakeApi({ artifacts, zipPath }) {
         full_name: 'o/r', private: false, visibility: 'public', default_branch: 'main',
       }))
     }
-    const single = /^\/repos\/o\/r\/actions\/artifacts\/(\d+)$/.exec(req.url ?? '')
-    if (single) {
-      const found = artifacts.find(a => String(a.id) === single[1])
-      return found ? send(200, JSON.stringify(found)) : send(404, '{}')
-    }
+    // The archive asks for the single-artifact response after the payload check.
+    // Answering 404 stops the chain right there (one bounded retry, ~2s) so the
+    // case does not pay for preconditions, the selftest and the archive itself:
+    // none of that is this file's subject, and paying for it four times is what
+    // ran the CI job into its 15-minute ceiling. The assertions below all live
+    // before this point, so nothing is weakened by it.
+    if (/^\/repos\/o\/r\/actions\/artifacts\/\d+$/.test(req.url ?? '')) return send(404, '{}')
     const zip = /^\/repos\/o\/r\/actions\/artifacts\/(\d+)\/zip$/.exec(req.url ?? '')
     if (zip) {
       if (Number(zip[1]) === LIVE_ID) return send(200, readFileSync(zipPath), 'application/zip')
@@ -110,7 +112,10 @@ function startFakeApi({ artifacts, zipPath }) {
     }
     return send(404, '{}')
   })
-  return new Promise(resolvePromise => {
+  return new Promise((resolvePromise, rejectPromise) => {
+    // A listen that cannot bind must reject: awaiting a promise that never
+    // settles is how one case stopped a whole CI job.
+    server.once('error', rejectPromise)
     server.listen(0, '127.0.0.1', () => {
       // unref: a server nobody closes must not be able to hang the runner.
       server.unref()
@@ -135,8 +140,16 @@ function seal(port, out) {
     `export GITHUB_REPOSITORY=${q('o/r')}`,
     `exec bash ${q(SCRIPT)} ${q(RUN_ID)} --out ${q(out)}`,
   ].join('; ')
-  const result = spawnSync('sh', ['-c', command], { cwd: ROOT, encoding: 'utf8' })
-  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' }
+  // timeout: a child that never returns must fail this case in a minute, not
+  // sit on the CI job's 15-minute budget until the whole run is cancelled. That
+  // is what happened once; the case had no ceiling of its own.
+  const result = spawnSync('sh', ['-c', command], { cwd: ROOT, encoding: 'utf8', timeout: 20_000 })
+  return {
+    status: result.status,
+    timedOut: result.error?.code === 'ETIMEDOUT' || result.signal === 'SIGTERM',
+    stdout: result.stdout ?? '',
+    stderr: result.stderr ?? '',
+  }
 }
 
 const artifact = (id, name) => ({
@@ -151,10 +164,11 @@ const artifact = (id, name) => ({
 const bothUploads = () => [artifact(ARCHIVE_ID, `archive-${RUN_ID}`), artifact(LIVE_ID, `live-${RUN_ID}`)]
 const zipRequests = seen => seen.filter(url => url.startsWith('/repos/o/r/actions/artifacts/') && url.endsWith('/zip'))
 
-test('online pick: a list holding archive- and live- fetches live-, never archive-', async () => {
+test('online pick: a list holding archive- and live- fetches live-, never archive-', { timeout: 30_000 }, async () => {
   const api = await startFakeApi({ artifacts: bothUploads(), zipPath: makeZip('nested.zip', payload('_temp/')) })
   try {
     const run = seal(api.port, join(scratch, 'case-nested'))
+    assert.equal(run.timedOut, false, `the script did not finish within 20s:\n${run.stdout}\n${run.stderr}`)
     const inputs = run.stdout.split('\n').find(l => l.startsWith('sealed inputs:'))
     assert.ok(
       inputs,
@@ -174,10 +188,11 @@ test('online pick: a list holding archive- and live- fetches live-, never archiv
   }
 })
 
-test('online pick: a flat artifact resolves to the top rather than assuming a subdirectory', async () => {
+test('online pick: a flat artifact resolves to the top rather than assuming a subdirectory', { timeout: 30_000 }, async () => {
   const api = await startFakeApi({ artifacts: bothUploads(), zipPath: makeZip('flat.zip', payload('')) })
   try {
     const run = seal(api.port, join(scratch, 'case-flat'))
+    assert.equal(run.timedOut, false, `the script did not finish within 20s:\n${run.stdout}\n${run.stderr}`)
     assert.match(run.stdout, /sealed payload layer: \(top\)/, `a flat artifact should resolve to the top:\n${run.stdout}`)
     assert.doesNotMatch(run.stderr, /深度 ≤3 以内找不到 live\.json/, `it failed to see the flat payload:\n${run.stderr}`)
     assert.deepEqual(zipRequests(api.seen), [`/repos/o/r/actions/artifacts/${LIVE_ID}/zip`], 'still only the live zip')
@@ -187,13 +202,14 @@ test('online pick: a flat artifact resolves to the top rather than assuming a su
   }
 })
 
-test('online pick: a list holding only archive- is refused, and nothing is downloaded', async () => {
+test('online pick: a list holding only archive- is refused, and nothing is downloaded', { timeout: 30_000 }, async () => {
   const api = await startFakeApi({
     artifacts: [artifact(ARCHIVE_ID, `archive-${RUN_ID}`)],
     zipPath: makeZip('unused.zip', payload('_temp/')),
   })
   try {
     const run = seal(api.port, join(scratch, 'case-archive-only'))
+    assert.equal(run.timedOut, false, `the script did not finish within 20s:\n${run.stderr}`)
     assert.equal(run.status, 1, `expected 1, got ${run.status}\n${run.stderr}`)
     assert.match(run.stderr, new RegExp(`live-${RUN_ID}`), 'the refusal must name the name it wanted')
     assert.deepEqual(zipRequests(api.seen), [], 'a refusal must not download anything')
@@ -203,13 +219,14 @@ test('online pick: a list holding only archive- is refused, and nothing is downl
   }
 })
 
-test('online pick: two artifacts under the same live- name are refused rather than picked', async () => {
+test('online pick: two artifacts under the same live- name are refused rather than picked', { timeout: 30_000 }, async () => {
   const api = await startFakeApi({
     artifacts: [artifact(LIVE_ID, `live-${RUN_ID}`), artifact(LIVE_ID + 1, `live-${RUN_ID}`)],
     zipPath: makeZip('dup.zip', payload('_temp/')),
   })
   try {
     const run = seal(api.port, join(scratch, 'case-two-live'))
+    assert.equal(run.timedOut, false, `the script did not finish within 20s:\n${run.stderr}`)
     assert.equal(run.status, 1, `expected 1, got ${run.status}\n${run.stderr}`)
     assert.match(run.stderr, /found 2/, 'the refusal must say how many matched')
     assert.deepEqual(zipRequests(api.seen), [], 'a multi-match must not download anything')
@@ -219,15 +236,19 @@ test('online pick: two artifacts under the same live- name are refused rather th
   }
 })
 
-test('online seal: it refuses a run that is not a completed success before it looks for artifacts', async () => {
+test('online seal: it refuses a run that is not a completed success before it looks for artifacts', { timeout: 30_000 }, async () => {
   const server = createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'application/json', connection: 'close' })
     if ((req.url ?? '').endsWith('/jobs')) return res.end(JSON.stringify({ jobs: [] }))
     res.end(JSON.stringify({ id: Number(RUN_ID), status: 'in_progress', conclusion: null }))
   })
-  await new Promise(resolvePromise => server.listen(0, '127.0.0.1', resolvePromise))
+  await new Promise((resolvePromise, rejectPromise) => {
+    server.once('error', rejectPromise)
+    server.listen(0, '127.0.0.1', resolvePromise)
+  })
   try {
     const run = seal(server.address().port, join(scratch, 'case-running'))
+    assert.equal(run.timedOut, false, `the script did not finish within 20s:\n${run.stderr}`)
     assert.equal(run.status, 1, `expected 1, got ${run.status}\n${run.stderr}`)
     assert.match(run.stderr, /conclusion=null/, 'the refusal must quote the conclusion it found')
   } finally {
