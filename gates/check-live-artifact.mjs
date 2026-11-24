@@ -80,7 +80,7 @@ if (failures.length === 0) {
 // 反向：扁平产物（那次 live 的真实形状）必须被拒
 const flatDir = join(tmp, 'flat')
 cpSync(join(FIX, 'artifact'), flatDir, { recursive: true })
-writeFileSync(join(flatDir, 'gates.json'), readFileSync(join(FIX, 'flat-gates.json')))
+writeFileSync(join(flatDir, 'gates.flat.json'), readFileSync(join(FIX, 'flat-gates.json')))
 const flat = run(archiveArgs(flatDir, join(tmp, 'flat.json')))
 if (flat.code !== 1) failures.push(`a flat product was not refused (exit ${flat.code}) — from-artifact must not archive a product without request/fingerprint sections`)
 else if (!/FROM-ARTIFACT REFUSED/.test(flat.stderr + flat.stdout)) failures.push(`the refusal did not say why: ${(flat.stderr + flat.stdout).trim().split('\n').slice(-1)[0]}`)

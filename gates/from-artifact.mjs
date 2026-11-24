@@ -57,7 +57,11 @@ const artifact = artifactList.find(a => a.name.includes(String(run.id))) ?? arti
 if (!artifact) fail('没有 artifact')
 const jobs = readJson(jobsJsonPath).jobs ?? []
 const live = readJson(path.join(dir, 'live.json'))
-const gates = readJson(path.join(dir, 'gates.json'))
+// 规范名是 gates.flat.json（gates.json 留给要归档的那份，job 内不再造同名拷贝）。
+// 旧名仍然收，但只在规范名缺席时用——不是为了让谁继续留拷贝，而是为了让删拷贝那一步不带风险。
+const gatesName = ['gates.flat.json', 'gates.json'].find(name => fs.existsSync(path.join(dir, name)))
+if (!gatesName) fail('artifact 里没有 gates.flat.json')
+const gates = readJson(path.join(dir, gatesName))
 const fields = readJson(path.join(dir, 'fields.json'))
 const egress = Object.fromEntries(read(path.join(dir, 'egress.env')).trim().split('\n').map(line => {
   const i = line.indexOf('=')
@@ -229,7 +233,7 @@ record.artifacts[0].sha256 = digest
 if (record.artifacts[0].retentionDays < 30) fail(`artifact 只留 ${record.artifacts[0].retentionDays} 天`)
 
 fs.writeFileSync(outPath, `${JSON.stringify(record, null, 2)}\n`)
-console.log(`WROTE ${outPath}`)
+console.log(`WROTE ${outPath} (gates: ${gatesName})`)
 console.log(`  run=${record.run.id} conclusion=${record.run.conclusion} live=${record.run.liveStepOutcome}`)
 console.log(`  toolsSha256=${record.fingerprint.toolsSha256}`)
 console.log(`  artifact sha256=${record.artifacts[0].sha256} retention=${record.artifacts[0].retentionDays}d`)
