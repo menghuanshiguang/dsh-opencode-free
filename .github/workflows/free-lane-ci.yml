@@ -176,3 +176,68 @@ jobs:
             ${{ runner.temp }}/opencode-assets.lock.json
             ${{ runner.temp }}/asset-log.jsonl
           retention-days: 30
+
+  extraction:
+    name: extraction (two kept groups, and the verifier's checks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: install the dev dependencies the typecheck needs
+        run: npm install --no-audit --no-fund
+
+      - name: check-extraction (import set, excluded reach, exports, leftovers)
+        run: node scripts/check-extraction.mjs | tee extraction.txt
+
+      - name: npm test
+        run: npm test
+
+      - name: npm run typecheck
+        run: npm run typecheck
+
+      - name: acceptance — year clock, today
+        run: node acceptance/year-clock-test.mjs | tee year-clock-today.txt
+
+      - name: acceptance — year clock, injected 2027-01-01
+        # rc may be 0 (still consistent) or 1 (the asset's frozen year, a known
+        # state until the product renders the run-time year). Anything above 1
+        # is the script itself breaking — a missing path, a syntax error — and
+        # must fail here, or a broken checker would keep this CI green.
+        run: |
+          set -uo pipefail
+          node acceptance/year-clock-test.mjs --clock 2027-01-01 | tee year-clock-2027.txt
+          rc=${PIPESTATUS[0]}
+          case "$rc" in
+            0|1) ;;
+            *) echo "::error::year-clock exited $rc (crash, bad path or syntax) — that is FAIL"; exit 1 ;;
+          esac
+          grep -q '渲染(2027) 含 2027' year-clock-2027.txt
+          echo "asset-consistency rc=$rc (1 = still frozen on the asset year, known until the product renders it)"
+
+      - name: acceptance — the trigger surface is one key, parsed as YAML
+        run: |
+          python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --user --quiet pyyaml
+          python3 acceptance/verify-trigger-surface.py .github/workflows
+
+      - name: acceptance — 13 rendered descriptions match the pinned sources
+        run: node acceptance/verify-rendered.mjs
+
+      - name: acceptance — the gate rejects the three synthetic cases
+        run: bash acceptance/fixtures/run-fixtures.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: extraction
+          path: |
+            extraction.txt
+            year-clock-today.txt
+            year-clock-2027.txt
+          retention-days: 30
