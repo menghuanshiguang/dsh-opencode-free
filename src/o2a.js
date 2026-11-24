@@ -246,17 +246,28 @@ var SHELL_NAME = { win32: "powershell", darwin: "bash", linux: "bash" };
 function v2ShellDescription(base, platform = process.platform) {
   return base.replace(/\$\{OS\}/g, SHELL_OS[platform] ?? platform).replace(/\$\{shell\}/g, SHELL_NAME[platform] ?? "bash");
 }
-function officialTool(shape, name) {
+// The official client puts the year into the `websearch` description at request
+// time (`${new Date().getFullYear()}`); the pinned asset carries the year of the
+// tag. Sending the asset's year unchanged would mean the body says "2026" for
+// the whole of 2027 while the real client says "2027" — a fingerprint drift that
+// only shows up when the year turns over. So the year is re-rendered for every
+// request, with the same local-clock rule the client uses. With today's clock
+// the bytes are the asset's, so the committed fingerprint is unchanged.
+function runTimeYearText(text, now = Date.now()) {
+  return text.replace(/(The current year is )\d{4}(\.)/, `$1${new Date(now).getFullYear()}$2`);
+}
+function officialTool(shape, name, now = Date.now()) {
   const definition = officialToolDefinition(name);
   let description = definition?.description ?? `Agent tool ${name}`;
   const parameters = definition?.parameters == null ? { type: "object", properties: {} } : structuredClone(definition.parameters);
   if (name === "shell") description = v2ShellDescription(description);
+  if (name === "websearch") description = runTimeYearText(description, now);
   if (shape === "claude") return { name, description, input_schema: parameters };
   const fn = { name, description, parameters };
   return shape === "flat" ? { type: "function", ...fn } : { type: "function", function: { ...fn, strict: false } };
 }
-function officialToolset(shape) {
-  return V2_OFFICIAL_TOOL_ORDER.map((name) => officialTool(shape, name));
+function officialToolset(shape, now = Date.now()) {
+  return V2_OFFICIAL_TOOL_ORDER.map((name) => officialTool(shape, name, now));
 }
 function renamableToolName(shape, entry) {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
@@ -754,6 +765,7 @@ export {
   officialSystemPrompt,
   officialTool,
   officialToolDefinition,
+  runTimeYearText,
   officialToolset,
   phaseAgeMs,
   projectID,

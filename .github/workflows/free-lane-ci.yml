@@ -352,10 +352,10 @@ jobs:
         run: node acceptance/year-clock-test.mjs | tee year-clock-today.txt
 
       - name: acceptance — year clock, injected 2027-01-01
-        # rc may be 0 (still consistent) or 1 (the asset's frozen year, a known
-        # state until the product renders the run-time year). Anything above 1
-        # is the script itself breaking — a missing path, a syntax error — and
-        # must fail here, or a broken checker would keep this CI green.
+        # This is a pass/fail now, not a known state: the shipped body renders the
+        # year at request time (src/o2a.js officialTool), so a 2027 clock must be
+        # green. rc 1 means the body froze at the asset's year again, and anything
+        # above 1 is the script itself breaking — both are FAIL here.
         run: |
           # The runner's shell is `bash -e`: a deliberate exit 1 would end the
           # step before its code is read, so -e is switched off here and every
@@ -364,12 +364,12 @@ jobs:
           set +e
           node acceptance/year-clock-test.mjs --clock 2027-01-01 | tee year-clock-2027.txt
           rc=${PIPESTATUS[0]}
-          case "$rc" in
-            0|1) ;;
-            *) echo "::error::year-clock exited $rc (crash, bad path or syntax) — that is FAIL"; exit 1 ;;
-          esac
-          grep -q '渲染(2027) 含 2027' year-clock-2027.txt || { echo "::error::the rendered-year line is missing — the template lost its run-time interpolation, which is a permanent FAIL"; exit 1; }
-          echo "asset-consistency rc=$rc (1 = still frozen on the asset year, known until the product renders it)"
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::year-clock exited $rc at a 2027 clock — the body no longer renders the run-time year (1), or the script broke (>1)"
+            exit 1
+          fi
+          grep -q 'PASS  产品在时钟 2027 渲染出 2027' year-clock-2027.txt || { echo "::error::the rendered-year line is missing — the product stopped rendering the injected clock"; exit 1; }
+          grep -q '"matchesOfficial":true' year-clock-2027.txt || { echo "::error::the product's render no longer equals the official template's render for that year"; exit 1; }
 
       - name: acceptance — the trigger surface is one key, parsed as YAML
         run: |

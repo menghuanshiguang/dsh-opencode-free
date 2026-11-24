@@ -12,6 +12,11 @@
       "path": "src/egress.js",
       "baselineBlob": "257fbcf219db4face6537fa7792b2a175bb33389",
       "reason": "The upstream egress layer carries the outlet ladder, the lane-exit pool and the loopback CONNECT relay: routing for a paid, multi-account channel. One anonymous lane has nothing to choose between, so the file is one function with one transport."
+    },
+    {
+      "path": "src/o2a.js",
+      "baselineBlob": "40457913e60ff620b1593c73e498b7a52f5c09ce",
+      "reason": "The official client renders the year inside the `websearch` description at request time (`${new Date().getFullYear()}`); the generated bundle here was a snapshot of the asset, so its websearch description carried the year of the tag and would have kept saying 2026 for the whole of 2027 while the real client said 2027 — a fingerprint drift that only appears when the year turns over. officialTool now re-renders that one description per request with the client's own local-clock rule; with today's clock the bytes are the asset's, so the committed fingerprint does not move."
     }
   ],
   "removed": [

@@ -118,17 +118,23 @@ check(/<env>[\s\S]*?<\/env>/.test(prompt), 'environment block present')
 const envBlock = prompt.match(/<env>([\s\S]*?)<\/env>/)?.[1]?.replace(/\s+/g, ' ').trim() ?? ''
 console.log(`     env block: ${envBlock}`)
 
-// The `websearch` description carries a year the upstream client interpolates at
-// request time; the asset pins the year of the tag. Today they agree; from
-// 2027-01-01 they will not. This is a notice, not a gate: the free tier validates
-// `read` and `shell`, so the drift is inert until proven otherwise — but it must
-// never pass silently.
+// The `websearch` description carries the year the upstream client interpolates
+// at request time; the asset pins the year of the tag it was captured from.
+// The shipped body no longer freezes it: src/o2a.js officialTool re-renders that
+// one description per request with the client's own local-clock rule, and
+// acceptance/year-clock-test.mjs judges the product's render against the
+// official template at any clock. Two consequences worth stating here:
+//   - the asset's year differing from today's is a fact about when the asset was
+//     captured, not a defect in this file's checks;
+//   - `toolsSha256` above is computed from that asset, so it is a fact of the
+//     asset's year: when the year turns over the committed lock has to be
+//     regenerated, or gate 0.8 compares a current-year body against a tag-year
+//     lock and reds while the lane itself is fine.
 const yearInAsset = /The current year is (\d{4})\./.exec(tools.find(tool => tool?.function?.name === 'websearch')?.function?.description ?? '')?.[1]
 const currentYear = String(new Date().getFullYear())
+console.log(`\n     websearch year: asset ${yearInAsset ?? '(none)'} (pinned at the tag) — the shipped body renders ${currentYear} at request time (src/o2a.js officialTool, judged by acceptance/year-clock-test.mjs)`)
 if (yearInAsset !== undefined && yearInAsset !== currentYear) {
-  console.log(`\nWARN websearch year: asset ${yearInAsset}, current ${currentYear} — the official client renders the run-time year, so this body no longer matches; decide fix vs gate before the next live dispatch`)
-} else {
-  console.log(`\n     websearch year: ${yearInAsset ?? '(none)'} (matches the run-time year)`)
+  console.log(`     NOTE the committed toolsSha256 was produced with ${yearInAsset}; a ${currentYear} body differs from it by that one number, so the lock has to be regenerated for this year before gate 0.8 is read`)
 }
 
 console.log(`\n=== client identity ===`)
