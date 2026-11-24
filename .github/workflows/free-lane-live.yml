@@ -211,8 +211,20 @@ jobs:
           rc_gates=$?
           cat "$RUNNER_TEMP/rehearsal-gates.txt"
           test "$rc_gates" -eq 1 || { echo "::error::gates must fail a zero-request run with exit 1, got $rc_gates"; exit 1; }
-          grep -q '"postCount": 0' "$RUNNER_TEMP/gates.json" || { echo "::error::gates.json does not record postCount 0"; exit 1; }
-          grep -q '0.3-transport-bun' "$RUNNER_TEMP/rehearsal-gates.txt" || { echo "::error::0.3 did not fail on a zero-request run"; exit 1; }
+          # Parsed, not grepped: a text match on `"postCount": 0` finds the string
+          # anywhere in the document (and finds nothing at all once the product
+          # gains a `request` section). The rehearsal asserts the values.
+          node -e '
+            const { readFileSync } = require("node:fs")
+            const doc = JSON.parse(readFileSync(process.argv[1], "utf8"))
+            const count = doc?.request?.postCount ?? doc?.postCount
+            if (count !== 0) { console.error(`::error::gates.json records postCount ${JSON.stringify(count)}, not the number 0`); process.exit(1) }
+            const check = doc?.gates?.find?.(entry => entry.id === "0.3") ?? doc?.checks?.["0.3-transport-bun"]
+            const failed = doc?.checks?.["0.3-transport-bun"]?.pass === false
+              || (Array.isArray(doc?.gates) && check && check.pass === false)
+            if (!failed) { console.error("::error::0.3 did not fail on a zero-request run"); process.exit(1) }
+            console.log(`rehearsal parsed: request.postCount = ${count}; 0.3 failed as designed`)
+          ' "$RUNNER_TEMP/gates.json"
           echo "rehearsal: both reporters ran; the only failures are the ones a zero-request run must produce"
           exit 0
 
