@@ -50,11 +50,14 @@ const tmp = mkdtempSync(join(tmpdir(), 'archive-'))
 const art = join(tmp, 'artifact')
 spawnSync('cp', ['-r', join(FIX, 'artifact'), art])
 
-// 合成产物 + 夹具的四个 run 侧输入，形状与 live 里 upload 之后的那一份相同
+// 合成产物 + 夹具的四份侧输入（run / jobs / artifacts / repo 的 API JSON）。
+// 这四个是「本次 run 的事实」：脚本不自己造，也不许从产物里反推——live 里它们就是
+// 上传之后那三次 curl 的响应，这里用夹具顶替，只是为了让 CI 不必真派发一次。
 const sidecars = ['run.json', 'jobs.json', 'artifacts.json', 'repo.json'].map(name => join(FIX, name))
 const out = join(tmp, 'archive.json')
 const baseArgs = [SCRIPT, '--dir', art, '--out', out,
   '--run-json', sidecars[0], '--jobs-json', sidecars[1], '--artifacts-json', sidecars[2], '--repo-json', sidecars[3]]
+const sidecarArgs = baseArgs.slice(5)
 
 // 1) 正例：全输入 → rc 0 且产物存在
 const good = run(baseArgs)
@@ -62,6 +65,23 @@ const produced = existsSync(out)
 const announced = /ARCHIVE-OK /.test(good.out)
 if (good.code !== 0 || !produced || !announced) failures.push(`正例失败（rc=${good.code}, 产物=${produced}, ARCHIVE-OK=${announced}）: ${good.out.trim().split('\n').slice(-1)[0]}`)
 say(good.code === 0 && produced && announced, 'positive', `rc=${good.code} 产物=${produced} ARCHIVE-OK=${announced}`)
+
+// 正例还要证明一件事：P1 的 LICENSE 与 P3 的历史是**脚本自己从检出里取的**，
+// 不是夹具喂进去的（参数表里根本没有 --license / --git-log 这两个口子）。
+// 判法：档案里 P1 的字节数、P3 的提交数必须等于这个仓库自己的事实。
+const gitOut = args => (spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' }).stdout ?? '')
+const licenseBytes = Buffer.byteLength(gitOut(['show', 'HEAD:LICENSE']))
+const repoCommits = gitOut(['rev-list', '--all', '--count']).trim()
+if (produced) {
+  const archiveDoc = JSON.parse(readFileSync(out, 'utf8'))
+  const p1 = archiveDoc.gates.find(g => g.id === 'P1')?.evidence ?? ''
+  const p3 = archiveDoc.gates.find(g => g.id === 'P3')?.evidence ?? ''
+  const fromHead = p1.includes(`bytes=${licenseBytes}`)
+  const fromGit = repoCommits !== '' && p3.includes(`commits=${repoCommits}`)
+  if (!fromHead) failures.push(`档案里的 P1 不是这个检出的 LICENSE（期望 bytes=${licenseBytes}，实际：${p1.slice(0, 80)}）`)
+  if (!fromGit) failures.push(`档案里的 P3 不是这个检出的历史（期望 commits=${repoCommits}，实际：${p3.match(/commits=\d+/)?.[0] ?? '没有 commits=…'}）`)
+  say(fromHead && fromGit, 'inputs-from-repo', `P1 bytes=${licenseBytes} P3 commits=${repoCommits}`)
+}
 
 if (produced) {
   // 2) 同一份输入两遍必须逐字节相同：档案可复现
@@ -88,6 +108,23 @@ const missing = run([SCRIPT, '--dir', noProduct, '--out', join(tmp, 'x.json'),
 const namedProduct = missing.out.includes('gates.flat.json')
 if (missing.code !== 2 || !namedProduct) failures.push(`产物目录缺 gates.flat.json 时 rc=${missing.code}、点名=${namedProduct}——契约是 exit 2 且点名缺的那个文件`)
 say(missing.code === 2 && namedProduct, 'missing-product', `rc=${missing.code} 点名=${namedProduct}`)
+
+// 6) 工作树里把 LICENSE 改成别的东西、HEAD 不动：脚本必须读 HEAD，仍然归档成功，
+//    且 P1 报的仍是 HEAD 那份的字节数。脚本要是改成读磁盘文件，这一档立刻红。
+const wtClone = join(tmp, 'worktree')
+spawnSync('git', ['clone', `file://${ROOT}`, wtClone], { encoding: 'utf8' })
+if (!existsSync(join(wtClone, 'LICENSE'))) {
+  failures.push('工作树那一档克隆不出来，无法判「脚本读的是 HEAD 而不是磁盘」')
+} else {
+  writeFileSync(join(wtClone, 'LICENSE'), 'not a license\n')
+  const wtOut = join(tmp, 'worktree.json')
+  const wtRun = run(['scripts/archive-live-run.sh', '--dir', art, '--out', wtOut, ...sidecarArgs], wtClone)
+  let wtBytes = 'none'
+  if (existsSync(wtOut)) wtBytes = (JSON.parse(readFileSync(wtOut, 'utf8')).gates.find(g => g.id === 'P1')?.evidence ?? '').match(/bytes=(\d+)/)?.[1] ?? 'none'
+  const headStillUsed = wtRun.code === 0 && wtBytes === String(licenseBytes)
+  if (!headStillUsed) failures.push(`工作树里的 LICENSE 被改掉后 rc=${wtRun.code}、P1 bytes=${wtBytes}（HEAD 是 ${licenseBytes}）——脚本读的不是 HEAD`)
+  say(headStillUsed, 'license-from-head', `rc=${wtRun.code} P1 bytes=${wtBytes} HEAD=${licenseBytes}`)
+}
 
 // 5) 浅历史 → 必须红
 //
