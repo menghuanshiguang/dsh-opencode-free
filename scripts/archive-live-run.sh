@@ -125,8 +125,13 @@ if [ -n "$artifactid" ] && [ -z "$artifactjson" ]; then
       -H "Authorization: Bearer $GITHUB_TOKEN" -H 'Accept: application/vnd.github+json' \
       "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifactid") || status=000
     [ "$status" = "200" ] && break
-    echo "artifact id=$artifactid: 第 $attempt 次取件返回 HTTP $status，2 秒后重试" >&2
-    sleep 2
+    # 最后一次之后没有第三次：骗人的「重试」比不说更坏（验收员 在失败路径上读到过它）。
+    if [ "$attempt" -lt 2 ]; then
+      echo "artifact id=$artifactid: 第 $attempt 次取件返回 HTTP $status，2 秒后重试" >&2
+      sleep 2
+    else
+      echo "artifact id=$artifactid: 第 $attempt 次取件返回 HTTP $status，没有下一次" >&2
+    fi
   done
   if [ "$status" != "200" ]; then
     die 1 "取不到 artifact id=$artifactid：HTTP $status（GET $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifactid）$(head -c 300 "$artifactjson" 2>/dev/null | tr '\n' ' ')"
