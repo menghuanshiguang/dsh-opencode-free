@@ -52,7 +52,8 @@ if (repoJsonPath) {
 //   参考：裸前缀照数，但每一处必须给 文件:行 与归类；出现 unclassified（=可能是真值）即 FAIL。
 // 为什么要分档：裸前缀会把扫描器自己的正则和喂给它的合成负样例判成泄漏——那是门红错对象。
 const TOKEN_SHAPES = /ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|gho_[A-Za-z0-9]{36}|ghs_[A-Za-z0-9]{36}|ghu_[A-Za-z0-9]{36}|sk-[A-Za-z0-9]{20,}/g
-const BARE_PREFIX = /(?:ghp_|github_pat_|gho_|ghs_|ghu_|sk-)/g
+// 词边界：mask-blur、task-queue、disk-io 里的 sk- 不是前缀
+const BARE_PREFIX = /(?<![A-Za-z0-9])(?:ghp_|github_pat_|gho_|ghs_|ghu_|sk-)/g
 
 function classify(line, matchText) {
   // 文档/注释里列举前缀：必零档已经保证没有真形态，这里只作参考档归类
@@ -60,6 +61,11 @@ function classify(line, matchText) {
   // 合成样例：源码里拼出来的假值，例如 'ghp_' + 'A'.repeat(36) 或 ${'A'.repeat(36)}
   const at = line.indexOf(matchText)
   const after = line.slice(at + matchText.length, at + matchText.length + 3)
+  // 本仓库/上游自己的 key 前缀与占位：sk-magpie-key-… / sk-… / sk-* / sk-${…}
+  const rest = line.slice(at + matchText.length)
+  if (matchText === 'sk-' && /^(magpie-key-|…|\.\.\.|\*|\$\{)/.test(rest)) {
+    return rest.startsWith('magpie-key-') ? 'internal-key-prefix' : 'placeholder'
+  }
   if (after.startsWith('${') || /\.repeat\(/.test(line) || /'[A-Z]'\s*\+/.test(line)) return 'synthetic-sample'
   // 扫描器自身：正则字面量或 grep 表达式
   if (/log\.match\(|grep\s+-|new RegExp|[A-Za-z_]\s*=\s*\/[^/]*ghp_/.test(line)) return 'scanner-source'
@@ -93,7 +99,7 @@ if (gitLogPath) {
   const tokenShapes = findings.filter(f => f.kind === 'token-shape')
   const creds = log.match(/https:\/\/[^/\s]+:[^@\s]+@/g) ?? []
   const bare = findings.filter(f => f.kind === 'bare-prefix')
-  const ALLOWED_CLASSES = new Set(['scanner-source', 'synthetic-sample', 'doc-reference'])
+  const ALLOWED_CLASSES = new Set(['scanner-source', 'synthetic-sample', 'doc-reference', 'internal-key-prefix', 'placeholder'])
   const unclassified = bare.filter(f => !ALLOWED_CLASSES.has(f.class))
   const classified = bare.map(f => `${f.file}:${f.line} ${f.bare} ${f.class}`)
   const hardOk = tokenShapes.length === 0 && creds.length === 0 && unclassified.length === 0

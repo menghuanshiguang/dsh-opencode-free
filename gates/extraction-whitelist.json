@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "stage": "2",
+  "frozenAt": "2026-11-24",
+  "frozenBy": "总策划",
+  "strategy": "kept-closure",
+  "baseline": {
+    "repo": "Ebony-Vinyl/dsh-our-free-model",
+    "commit": "f29116baea55483ff067c1816966f1d08d8f0981",
+    "files": 899
+  },
+  "imported": {
+    "count": 7,
+    "bytes": 211307,
+    "files": [
+      "src/bun-fetch.js",
+      "src/egress.js",
+      "src/http.js",
+      "src/o2a.js",
+      "src/open-external.js",
+      "src/store.js",
+      "src/upstream.js"
+    ],
+    "note": "从 src/upstream.js 起的相对 import 闭包，7 个文件；catalog.js 不是它的依赖（曾误算为 8）。"
+  },
+  "exclusionsIndex": "docs/baseline-exclusions.json",
+  "publicExports": {
+    "entry": "src/gateway.js",
+    "packageJsonExports": {
+      ".": "./src/gateway.js"
+    },
+    "symbols": [
+      "startGateway",
+      "createGateway"
+    ],
+    "freeLaneInternalSymbols": [
+      "applyFingerprint",
+      "endpointFor",
+      "sessionForConversation"
+    ]
+  },
+  "criteria": [
+    "imported ⊆ upstream，逐文件 blob sha 与字节数相等（899 → 7 + 892 = 899，两集不相交）",
+    "imported 内 src/accounts/providers/、eac*、worker 管理页/统计路由零命中",
+    "exclusions 里任何文件被 imported 代码 import 到即 FAIL（verify-closure）",
+    "src/gateway.js 导出恰好 {startGateway, createGateway}，package.json exports 只有 \".\""
+  ],
+  "pluginForm": "removed"
+}
