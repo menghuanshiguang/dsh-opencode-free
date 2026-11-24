@@ -243,6 +243,9 @@ jobs:
       - name: npm run typecheck
         run: npm run typecheck
 
+      - name: rehearsal assertions bite (postCount is a number, gates are parsed)
+        run: node gates/check-rehearsal.mjs --self-test | tee rehearsal.txt
+
       - name: a live product must archive (fixture; schema untouched)
         run: node gates/check-live-artifact.mjs | tee live-artifact.txt
 
@@ -340,6 +343,7 @@ jobs:
             newline-policy.txt
             gateway-contract.txt
             live-artifact.txt
+            rehearsal.txt
             year-clock-today.txt
             year-clock-2027.txt
           retention-days: 30

@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "stage": "4",
+  "request": {
+    "model": "nemotron-3.5-lightning-free",
+    "postCount": 0,
+    "retried": false
+  },
+  "gates": [
+    {
+      "id": "P1",
+      "pass": true,
+      "evidence": "P1: rehearsal"
+    },
+    {
+      "id": "P2",
+      "pass": true,
+      "evidence": "P2: rehearsal"
+    },
+    {
+      "id": "P3",
+      "pass": true,
+      "evidence": "P3: rehearsal"
+    },
+    {
+      "id": "0.1",
+      "pass": true,
+      "evidence": "0.1: rehearsal"
+    },
+    {
+      "id": "0.2",
+      "pass": true,
+      "evidence": "0.2: rehearsal"
+    },
+    {
+      "id": "0.3",
+      "pass": false,
+      "evidence": "0.3: rehearsal"
+    },
+    {
+      "id": "0.4",
+      "pass": true,
+      "evidence": "0.4: rehearsal"
+    },
+    {
+      "id": "0.5",
+      "pass": false,
+      "evidence": "0.5: rehearsal"
+    },
+    {
+      "id": "0.6",
+      "pass": false,
+      "evidence": "0.6: rehearsal"
+    },
+    {
+      "id": "0.7",
+      "pass": false,
+      "evidence": "0.7: rehearsal"
+    },
+    {
+      "id": "0.8",
+      "pass": true,
+      "evidence": "0.8: rehearsal"
+    },
+    {
+      "id": "0.9",
+      "pass": false,
+      "evidence": "0.9: rehearsal"
+    }
+  ],
+  "verdict": {
+    "pass": false,
+    "failed": [
+      "0.3",
+      "0.5",
+      "0.6",
+      "0.7",
+      "0.9"
+    ]
+  }
+}
