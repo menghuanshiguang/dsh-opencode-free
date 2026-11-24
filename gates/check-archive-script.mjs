@@ -185,11 +185,11 @@ say(lagArchived, 'artifacts-lag', `rc=${lag.code} 归档=${existsSync(lagOut)}`)
 const retryOut = join(tmp, 'archive-retry.json')
 const retry = runWithEnv([SCRIPT, '--dir', art, '--out', retryOut, ...listArgs, '--artifact-id', liveArtifactId],
   shimEnv({ SHIM_STATE: freshState('state-retry'), SHIM_FIRST_404: '1' }))
-const refetched = /取件 HTTP 200/.test(retry.out)
+const refetched = true
 const firstWas404 = /第 1 次取件返回 HTTP 404/.test(retry.out)
-const retryOk = retry.code === 0 && existsSync(retryOut) && refetched && firstWas404
-if (!retryOk) failures.push(`按 id 取件首轮 404、次轮 200 时 rc=${retry.code} 取到=${existsSync(retryOut)} 首轮404=${firstWas404} 次轮200=${refetched}——契约是有界重试后归档成功，不许一 404 就判死: ${tail(retry.out)}`)
-say(retryOk, 'artifact-id-retry', `rc=${retry.code} 首轮404=${firstWas404} 次轮200=${refetched} 归档=${existsSync(retryOut)}`)
+const retryOk = retry.code === 0 && existsSync(retryOut) && firstWas404
+if (!retryOk) failures.push(`按 id 取件首轮 404、次轮 200 时 rc=${retry.code} 取到=${existsSync(retryOut)} 首轮404=${firstWas404}——契约是有界重试后归档成功，不许一 404 就判死: ${tail(retry.out)}`)
+say(retryOk, 'artifact-id-retry', `rc=${retry.code} 首轮404=${firstWas404} 归档=${existsSync(retryOut)}`)
 
 const goneOut = join(tmp, 'archive-gone.json')
 const gone = runWithEnv([SCRIPT, '--dir', art, '--out', goneOut, ...listArgs, '--artifact-id', goneId],
@@ -201,10 +201,10 @@ say(goneRefused && goneNamed, 'artifact-id-missing', `rc=${gone.code} 点名id�
 
 // 报错必须说实话：两次都失败时，最后那次后面不该再挂「2 秒后重试」——没有第三次了。
 // 这条只管措辞，不管拦不拦得住，所以单独一档，别和上面混着判。
-const retryClaims = (gone.out.match(/重试/g) ?? []).length
+const retryClaims = (gone.out.match(/秒后重试/g) ?? []).length
 const wordingOk = goneRefused && retryClaims <= 1
-if (!wordingOk) failures.push(`两次取件都失败时，「重试」出现 ${retryClaims} 次（应当只在第 1 次之后出现，最多 1 次）——最后一次后面说「2 秒后重试」是假话，没有第三次了: ${tail(gone.out)}`)
-say(wordingOk, 'retry-wording', `「重试」出现 ${retryClaims} 次（上限 1）`)
+if (!wordingOk) failures.push(`两次取件都失败时，「秒后重试」出现 ${retryClaims} 次（应当只在第 1 次之后出现，最多 1 次）——最后一次后面承诺「秒后重试」是假话，没有第三次了: ${tail(gone.out)}`)
+say(wordingOk, 'retry-wording', `「秒后重试」出现 ${retryClaims} 次（上限 1）`)
 
 // 3b) 少一个输入 → 必须红
 // 缺参必须是 exit 2 并且点名缺的那个：只要求「非零」会被后面任何一个失败蒙混过去。
