@@ -119,7 +119,7 @@
     {
       "id": "0.3",
       "pass": true,
-      "evidence": "transport 由 bunFetch 路径打印，非推断"
+      "evidence": "阶段 0 记 derived：由「bun 已安装 + 未设退还开关 + postCount=1」推断，不是观测（督查 2026-11-24 裁定）；transport=bun 的观测证据由阶段 4 的 run 承担"
     },
     {
       "id": "0.4",

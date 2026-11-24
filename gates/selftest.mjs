@@ -40,6 +40,12 @@ const CASES = [
     mutate(d) { delete d.env.transportBasis },
   },
   {
+    id: 'transport-claimed-observed',
+    gate: '0.3',
+    case: '把阶段 0 的推断值改成 observed（改写历史）',
+    mutate(d) { d.env.transportBasis = 'observed' },
+  },
+  {
     id: 'transport-node',
     gate: '0.3',
     case: '退回 node 传输（OUR_FREE_MODEL_FREE_TRANSPORT 被设置）',

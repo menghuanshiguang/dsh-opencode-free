@@ -110,6 +110,30 @@ check('env.transportBasis', ['observed', 'derived'].includes(env.transportBasis)
 check('env.transportBasis', !(env.transportBasis === 'derived' && !((doc.request?.postCount ?? 0) >= 1)), 'derived 的依据要求 postCount>=1：零请求的 run 推不出 Bun')
 check('env.transportEvidence', str(env.transportEvidence), '必须给出证明实际传输路径的日志定位')
 
+// 0.3 的口径（督查 2026-11-24 裁定）：transport 只能从 capture 里读观测行，不能从环境推断。
+// 阶段 0 那次是推断，历史就留在 derived 上——把它改成 observed 等于改写历史；
+// 阶段 4 起，判据要求发包那层代码自己写出「谁发的包」。
+if (String(stage) === '0') {
+  check('env.transportBasis', env.transportBasis !== 'observed',
+    '阶段 0 的 transport 只能记 derived：它是从「装了 bun + 未设退还开关 + postCount=1」推出来的，改成 observed 就是改写历史；transport=bun 这条证据由阶段 4 的观测 run 承担')
+} else if (Number(stage) >= 4) {
+  const observed = env.transportObserved
+  check('env.transportBasis', env.transportBasis === 'observed',
+    '阶段 4 起 transport 必须是观测值：由真正发包的代码写进 capture，再从 capture 读进档案')
+  check('env.transportObserved', isObject(observed), '缺少 transportObserved：implementation / pid / version / source 必须由发包代码写出，不许从环境推断')
+  if (isObject(observed)) {
+    check('env.transportObserved.implementation', ['bun-worker', 'node-fetch'].includes(observed.implementation),
+      `implementation 只能是 bun-worker 或 node-fetch，实际 ${JSON.stringify(observed.implementation)}`)
+    check('env.transportObserved.pid', int(observed.pid, 1), 'pid 必须是真实子进程 id（正整数）')
+    check('env.transportObserved.version', str(observed.version), 'version 不能为空')
+    check('env.transportObserved.source', str(observed.source), 'source 必须写明这行观测值出自哪份 capture')
+    if (env.transport === 'bun') {
+      check('env.transportObserved.implementation', observed.implementation === 'bun-worker',
+        'env.transport=bun 但观测行说不是 bun worker 发的包——观测值与声称值矛盾，以观测为准')
+    }
+  }
+}
+
 // ---- egress ----
 const egress = doc.egress ?? {}
 check('egress', isObject(doc.egress), '缺失')
