@@ -199,7 +199,8 @@ for (const c of cases) {
   const file = path.join(tmpDir, `${c.id}.json`)
   fs.writeFileSync(file, JSON.stringify(doc, null, 2))
   // 合成样例需要 --allow-synthetic 才能走到后面的规则；这正是要测的规则本身。
-  const allow = doc.synthetic === true ? ['--allow-synthetic'] : []
+  // stage 0 现在缺 --lock 就 exit 2（闸门缺参不许降级），所以每个用例也把锁带上。
+  const allow = doc.synthetic === true ? ['--allow-synthetic', '--lock', lock] : ['--lock', lock]
   if (typeof c.extra === 'function') allow.push(...c.extra(tmpDir))
   const r = runValidator(file, allow)
   const blocked = r.code === 1

@@ -1,0 +1,68 @@
+{
+  "postCount": 0,
+  "retried": false,
+  "toolCount": 13,
+  "passed": false,
+  "checks": {
+    "0.1-dispatch-only": {
+      "pass": true,
+      "detail": "0.1-dispatch-only"
+    },
+    "0.1-confirm": {
+      "pass": true,
+      "detail": "0.1-confirm"
+    },
+    "0.2-ubuntu-latest": {
+      "pass": true,
+      "detail": "0.2-ubuntu-latest"
+    },
+    "0.2-bun-version": {
+      "pass": true,
+      "detail": "0.2-bun-version"
+    },
+    "0.3-transport-bun": {
+      "pass": false,
+      "detail": "0.3-transport-bun"
+    },
+    "0.3-transport-observed": {
+      "pass": false,
+      "detail": "0.3-transport-observed"
+    },
+    "0.3-worker-spawn-recorded": {
+      "pass": false,
+      "detail": "0.3-worker-spawn-recorded"
+    },
+    "0.3-no-node-transport": {
+      "pass": false,
+      "detail": "0.3-no-node-transport"
+    },
+    "0.4-egress": {
+      "pass": true,
+      "detail": "0.4-egress"
+    },
+    "0.5-200-pong": {
+      "pass": false,
+      "detail": "0.5-200-pong"
+    },
+    "0.6-billing-source": {
+      "pass": false,
+      "detail": "0.6-billing-source"
+    },
+    "0.7-single-request": {
+      "pass": false,
+      "detail": "0.7-single-request"
+    },
+    "0.7-no-retry": {
+      "pass": false,
+      "detail": "0.7-no-retry"
+    },
+    "0.8-tools-sha256": {
+      "pass": true,
+      "detail": "0.8-tools-sha256"
+    },
+    "0.9-inputs-present": {
+      "pass": false,
+      "detail": "0.9-inputs-present"
+    }
+  }
+}

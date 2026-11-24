@@ -66,6 +66,14 @@ check('schemaVersion', doc.schemaVersion === 1, '必须是 1')
 const stage = doc.stage
 check('stage', ['0', '1', '2', '3', '4', '5'].includes(stage), `stage 非法：${JSON.stringify(stage)}`)
 if (wantStage !== undefined) check('stage', String(stage) === String(wantStage), `期望 stage=${wantStage}，实际 ${stage}`)
+
+// 闸门缺参不许降级（2026-11-24 规矩）：stage 0 与 stage 4 的核心判据就是指纹与锁的比对，
+// 不带 --lock 时那段整块不会执行、退出码还是 0——那等于把判据静默关掉。这两个 stage 缺锁即 exit 2。
+const LOCK_REQUIRED = new Set(['0', '4'])
+if (LOCK_REQUIRED.has(String(stage)) && !lockFile) {
+  console.error(`validate: stage ${stage} 必须带 --lock <docs/fingerprint-baseline.json>；不带锁时 0.8 的锁比对与传递相等链不会执行，不能算验过`)
+  process.exit(2)
+}
 check('synthetic', doc.synthetic === undefined || typeof doc.synthetic === 'boolean', '必须是布尔')
 if (doc.synthetic === true && !allowSynthetic) {
   fail('synthetic', '这是合成样例（synthetic=true），归档器与阶段判定一律不接受；演示请加 --allow-synthetic')
