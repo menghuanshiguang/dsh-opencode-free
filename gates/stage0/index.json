@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "stage": "0",
+  "entries": [
+    {
+      "file": "gates/stage0/45333286803-1.json",
+      "runId": 45333286803,
+      "attempt": 1,
+      "archivedAt": "2026-11-24T05:36:40.839Z",
+      "sha256": "13284091ac6dae7e589b26679d773585dbf46e8de4643b7a652ba7a0424c2ab7",
+      "model": "nemotron-3.5-lightning-free",
+      "toolsSha256": "6fb3aed805228cc69ca5e838b7af2fffa9bf57b8c27ebd7606fd94e41c05b77f",
+      "systemSha256": "a72c6d6931287d14c8385cfc9390f0a7541799523f3f093c01ac5b64f5d5f138",
+      "billingSource": "free"
+    }
+  ]
+}

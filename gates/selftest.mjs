@@ -64,6 +64,18 @@ const CASES = [
     mutate(d) { d.request.postCount = 0 },
   },
   {
+    id: 'reply-not-pong',
+    gate: '0.5',
+    case: '上游回复不是 PONG（把拒答当成功）',
+    mutate(d) { d.response.reply = 'Free usage limit reached' },
+  },
+  {
+    id: 'billing-empty',
+    gate: '0.6',
+    case: 'billingSource 为空（没有计费来源也判过）',
+    mutate(d) { d.response.billingSource = '' },
+  },
+  {
     id: 'retried',
     gate: '0.7',
     case: 'retried=true',
@@ -74,6 +86,12 @@ const CASES = [
     gate: '0.8',
     case: 'live toolsSha256 与 CI 期望值不等',
     mutate(d) { d.fingerprint.expectedToolsSha256 = 'f'.repeat(64) },
+  },
+  {
+    id: 'egress-missing',
+    gate: '0.4',
+    case: '出口国家缺失（日志没打 country 却判 0.4 过）',
+    mutate(d) { delete d.egress.country },
   },
   {
     id: 'tool-order-swapped',
@@ -187,6 +205,67 @@ for (const c of cases) {
     exitCode: r.code,
     ok: blocked,
     detail: blocked ? 'BLOCKED (exit 1)' : `NOT BLOCKED (exit ${r.code})`,
+    output: r.out.trim().split('\n').slice(0, 3),
+  })
+}
+
+// 2) 外部判定器（P1–P3）的反向用例：输入是文件，必须真的让 check-preconditions 退出 1
+const checker = path.join(here, 'check-preconditions.mjs')
+
+function runChecker(args) {
+  try {
+    const out = execFileSync(process.execPath, [checker, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    return { code: 0, out }
+  } catch (error) {
+    return { code: error.status ?? 1, out: `${error.stdout ?? ''}${error.stderr ?? ''}` }
+  }
+}
+
+const EXT_CASES = [
+  {
+    id: 'p1-fake-license',
+    gate: 'P1',
+    case: '许可证没有 Ebony-Vinyl 原版权行',
+    build(dir) {
+      const file = path.join(dir, 'LICENSE.bad')
+      fs.writeFileSync(file, 'MIT License\n\nCopyright (c) 2026 Someone Else\n')
+      return ['--license', file]
+    },
+  },
+  {
+    id: 'p2-private-repo',
+    gate: 'P2',
+    case: 'API 返回 private:true（拿私库冒充公开）',
+    build(dir) {
+      const file = path.join(dir, 'repo.bad.json')
+      fs.writeFileSync(file, JSON.stringify({ private: true, visibility: 'private' }))
+      return ['--repo-json', file]
+    },
+  },
+  {
+    id: 'p3-token-in-history',
+    gate: 'P3',
+    case: '历史里出现 token 形态（grep 数不该放过）',
+    build(dir) {
+      const file = path.join(dir, 'log.bad.txt')
+      // 运行时拼出来，不把任何真 token 形态落进仓库
+      fs.writeFileSync(file, `commit abc\n+const token = 'ghp_${'A'.repeat(36)}'\n`)
+      return ['--git-log', file]
+    },
+  },
+]
+
+for (const c of (onlyCase ? EXT_CASES.filter(x => x.id === onlyCase) : EXT_CASES)) {
+  const args = c.build(tmpDir)
+  const r = runChecker(args)
+  results.push({
+    id: c.id,
+    gate: c.gate,
+    case: c.case,
+    command: `node gates/selftest.mjs --case ${c.id}`,
+    exitCode: r.code,
+    ok: r.code === 1,
+    detail: r.code === 1 ? 'BLOCKED (exit 1)' : `NOT BLOCKED (exit ${r.code})`,
     output: r.out.trim().split('\n').slice(0, 3),
   })
 }

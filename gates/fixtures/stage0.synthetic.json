@@ -167,9 +167,57 @@
   },
   "negativeTests": [
     {
+      "gate": "P1",
+      "case": "许可证没有 Ebony-Vinyl 原版权行",
+      "command": "node gates/selftest.mjs --case p1-fake-license",
+      "exitCode": 1
+    },
+    {
+      "gate": "P2",
+      "case": "API 返回 private:true（拿私库冒充公开）",
+      "command": "node gates/selftest.mjs --case p2-private-repo",
+      "exitCode": 1
+    },
+    {
+      "gate": "P3",
+      "case": "历史里出现 token 形态（grep 数不该放过）",
+      "command": "node gates/selftest.mjs --case p3-token-in-history",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.1",
+      "case": "job 红了却不签豁免（red run 直接当证据）",
+      "command": "node gates/selftest.mjs --case failure-no-waiver",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.2",
+      "case": "bunVersion 为空",
+      "command": "node gates/selftest.mjs --case bun-version-null",
+      "exitCode": 1
+    },
+    {
       "gate": "0.3",
-      "case": "零请求 run 把 transport 写成推断值 bun（bunVersion 有值但 transportSource=inferred）",
-      "command": "node gates/selftest.mjs --case transport-inferred",
+      "case": "transport 没有观测/推导依据（transportBasis 缺失）",
+      "command": "node gates/selftest.mjs --case transport-basis-missing",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.4",
+      "case": "出口国家缺失（日志没打 country 却判 0.4 过）",
+      "command": "node gates/selftest.mjs --case egress-missing",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.5",
+      "case": "上游回复不是 PONG（把拒答当成功）",
+      "command": "node gates/selftest.mjs --case reply-not-pong",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.6",
+      "case": "billingSource 为空（没有计费来源也判过）",
+      "command": "node gates/selftest.mjs --case billing-empty",
       "exitCode": 1
     },
     {
@@ -180,8 +228,14 @@
     },
     {
       "gate": "0.8",
-      "case": "live 的 toolsSha256 与 CI 期望值不等（指纹环断了）",
+      "case": "live toolsSha256 与 CI 期望值不等",
       "command": "node gates/selftest.mjs --case tools-hash-mismatch",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.9",
+      "case": "artifact 只留 7 天",
+      "command": "node gates/selftest.mjs --case retention-short",
       "exitCode": 1
     }
   ],

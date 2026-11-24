@@ -181,7 +181,11 @@ jobs:
         env:
           OFM_WIRE_DIR: ${{ runner.temp }}/wire
         run: |
+          # The runner shell is `bash -e`, so a deliberately failing reporter would
+          # abort the step before its exit code is inspected. The rehearsal reads
+          # those codes itself and decides; it never lets them end the step.
           set -uo pipefail
+          set +e
           echo "dry run: no live request is sent; the reporters run against an empty capture"
           node tools/report-wire.mjs --dir "$RUNNER_TEMP/wire" --expect "$RUNNER_TEMP/fields.json" > "$RUNNER_TEMP/rehearsal-report.txt" 2>&1
           rc_report=$?
@@ -197,6 +201,7 @@ jobs:
           grep -q '"postCount": 0' "$RUNNER_TEMP/gates.json" || { echo "::error::gates.json does not record postCount 0"; exit 1; }
           grep -q '0.3-transport-bun' "$RUNNER_TEMP/rehearsal-gates.txt" || { echo "::error::0.3 did not fail on a zero-request run"; exit 1; }
           echo "rehearsal: both reporters ran; the only failures are the ones a zero-request run must produce"
+          exit 0
 
       - uses: actions/upload-artifact@v4
         if: always()

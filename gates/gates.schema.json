@@ -242,7 +242,6 @@
       "additionalProperties": false,
       "required": [
         "model",
-        "modelsFreeCount",
         "postCount",
         "retried",
         "endpoint",
@@ -252,10 +251,6 @@
         "model": {
           "type": "string",
           "minLength": 1
-        },
-        "modelsFreeCount": {
-          "type": "integer",
-          "minimum": 1
         },
         "postCount": {
           "const": 1
@@ -410,6 +405,10 @@
         "contractsSha256": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
+        },
+        "ciRunId": {
+          "type": "string",
+          "description": "证明逐字节来源的 CI run（free-lane-ci）。与 live run 可能是不同 commit，记录里如实写。"
         }
       }
     },

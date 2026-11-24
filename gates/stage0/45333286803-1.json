@@ -1,0 +1,315 @@
+{
+  "schemaVersion": 1,
+  "stage": "0",
+  "run": {
+    "id": 45333286803,
+    "url": "https://github.com/menghuanshiguang/dsh-opencode-free/actions/runs/45333286803",
+    "workflow": "free-lane-live",
+    "event": "workflow_dispatch",
+    "conclusion": "failure",
+    "liveStepOutcome": "success",
+    "failedSteps": [
+      {
+        "name": "report the wire capture",
+        "reason": "run 45333286803 的 live 步骤为 success，200/PONG/billing=free/postCount=1 证据完整（artifact 14892409076，0.1–0.9 在原始 artifact 上 13/13 通过，toolsSha256=6fb3aed8…=锁值）。conclusion=failure 仅由报告步骤的旧 bug 造成，与请求无关。一次性豁免，不构成先例。"
+      }
+    ],
+    "attempt": 1,
+    "createdAt": "2026-11-24T05:26:04Z",
+    "headSha": "57fbc0c1e0a4ad6590a6d69ba96671d9ac34224c",
+    "actor": "menghuanshiguang"
+  },
+  "repo": {
+    "fullName": "menghuanshiguang/dsh-opencode-free",
+    "visibility": "public",
+    "commit": {
+      "sha": "57fbc0c1e0a4ad6590a6d69ba96671d9ac34224c",
+      "branch": "main"
+    }
+  },
+  "env": {
+    "runner": "ubuntu-latest",
+    "runtime": "bun",
+    "bunVersion": "1.4.5",
+    "node": "v24.22.3",
+    "transport": "bun",
+    "transportBasis": "derived",
+    "transportEvidence": "live 步骤 success；OUR_FREE_MODEL_FREE_TRANSPORT=(unset)；bun=/home/runner/.bun/bin/bun；bunVersion=1.4.5；postCount=1",
+    "transportOverride": false,
+    "os": "Linux"
+  },
+  "egress": {
+    "ip": "172.184.211.244",
+    "country": "US",
+    "source": "artifact _temp/egress.env（workflow 在发请求前记录）",
+    "colo": "SJC"
+  },
+  "request": {
+    "model": "nemotron-3.5-lightning-free",
+    "postCount": 1,
+    "retried": false,
+    "endpoint": "/inference/openai/v1/chat/completions",
+    "ua": "opencode/latest/2.2.3/cli"
+  },
+  "fingerprint": {
+    "toolCount": 13,
+    "toolOrder": [
+      "edit",
+      "glob",
+      "grep",
+      "patch",
+      "question",
+      "read",
+      "shell",
+      "skill",
+      "subagent",
+      "todowrite",
+      "webfetch",
+      "websearch",
+      "write"
+    ],
+    "toolsSha256": "6fb3aed805228cc69ca5e838b7af2fffa9bf57b8c27ebd7606fd94e41c05b77f",
+    "expectedToolsSha256": "6fb3aed805228cc69ca5e838b7af2fffa9bf57b8c27ebd7606fd94e41c05b77f",
+    "systemBytes": 2122,
+    "systemSha256": "a72c6d6931287d14c8385cfc9390f0a7541799523f3f093c01ac5b64f5d5f138",
+    "platform": "linux",
+    "shellDescPrefix": "Commands run on Linux using bash."
+  },
+  "response": {
+    "status": 200,
+    "ok": true,
+    "reply": "PONG",
+    "billingSource": "free",
+    "elapsedMs": 631,
+    "chunks": 17,
+    "errorType": null
+  },
+  "assets": {
+    "tag": "v2.2.3",
+    "provenance": {
+      "blobMatch": 14,
+      "total": 14
+    },
+    "lockSha256": "153f0996c9746a3dc17250aba4c227c42124963835c83dc21701e2f26a0e24dd",
+    "contractsSha256": "ad6c09b55693669f0587ab881638f70ba5eca259935d598afc7a1e358bae8619",
+    "ciRunId": "45333577016"
+  },
+  "gates": [
+    {
+      "id": "P1",
+      "pass": true,
+      "evidence": "MIT=true Ebony-Vinyl=true bytes=14289"
+    },
+    {
+      "id": "P2",
+      "pass": true,
+      "evidence": "private=false visibility=public"
+    },
+    {
+      "id": "P3",
+      "pass": true,
+      "evidence": "tokenHits=0 credUrlHits=0"
+    },
+    {
+      "id": "0.1",
+      "pass": true,
+      "evidence": "0.1-dispatch-only: \"workflow_dispatch\" | 0.1-confirm: \"true\""
+    },
+    {
+      "id": "0.2",
+      "pass": true,
+      "evidence": "0.2-ubuntu-latest: \"Linux\" | 0.2-bun-version: \"1.4.5\""
+    },
+    {
+      "id": "0.3",
+      "pass": true,
+      "evidence": "0.3-transport-bun: \"bun / bunVersion=1.4.5 / postCount=1\" | 0.3-no-node-transport: \"(unset)\""
+    },
+    {
+      "id": "0.4",
+      "pass": true,
+      "evidence": "0.4-egress: \"172.184.211.244 / US\""
+    },
+    {
+      "id": "0.5",
+      "pass": true,
+      "evidence": "0.5-200-pong: 200"
+    },
+    {
+      "id": "0.6",
+      "pass": true,
+      "evidence": "0.6-billing-source: \"free\""
+    },
+    {
+      "id": "0.7",
+      "pass": true,
+      "evidence": "0.7-single-request: 1 | 0.7-no-retry: false"
+    },
+    {
+      "id": "0.8",
+      "pass": true,
+      "evidence": "0.8-tools-sha256: \"6fb3aed805228cc69ca5e838b7af2fffa9bf57b8c27ebd7606fd94e41c05b77f\""
+    },
+    {
+      "id": "0.9",
+      "pass": true,
+      "evidence": "0.9-inputs-present: {\"fields\":true,\"live\":true}"
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "live-45333286803",
+      "kind": "log",
+      "url": "https://github.com/menghuanshiguang/dsh-opencode-free/actions/runs/45333286803",
+      "sha256": "ba847a0d183dad384a4beeb797168c8a2470dfd24e289edb70abb51964e96e8a",
+      "retentionDays": 30
+    }
+  ],
+  "verdict": {
+    "pass": true,
+    "failed": [],
+    "waiver": {
+      "approvedBy": "督查",
+      "reason": "run 45333286803 的 live 步骤为 success，200/PONG/billing=free/postCount=1 证据完整（artifact 14892409076，0.1–0.9 在原始 artifact 上 13/13 通过，toolsSha256=6fb3aed8…=锁值）。conclusion=failure 仅由报告步骤的旧 bug 造成，与请求无关。一次性豁免，不构成先例。",
+      "at": "2026-11-24T13:31:50+08:00"
+    }
+  },
+  "negativeTests": [
+    {
+      "gate": "0.3",
+      "case": "transport 没有观测/推导依据（transportBasis 缺失）",
+      "command": "node gates/selftest.mjs --case transport-basis-missing",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.3",
+      "case": "退回 node 传输（OUR_FREE_MODEL_FREE_TRANSPORT 被设置）",
+      "command": "node gates/selftest.mjs --case transport-node",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.2",
+      "case": "bunVersion 为空",
+      "command": "node gates/selftest.mjs --case bun-version-null",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.7",
+      "case": "postCount=2（第二发没被拦）",
+      "command": "node gates/selftest.mjs --case post-twice",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.3",
+      "case": "零请求（postCount=0）仍把 transport 记成 bun，0.3 靠推断通过",
+      "command": "node gates/selftest.mjs --case post-zero",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.5",
+      "case": "上游回复不是 PONG（把拒答当成功）",
+      "command": "node gates/selftest.mjs --case reply-not-pong",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.6",
+      "case": "billingSource 为空（没有计费来源也判过）",
+      "command": "node gates/selftest.mjs --case billing-empty",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.7",
+      "case": "retried=true",
+      "command": "node gates/selftest.mjs --case retried",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.8",
+      "case": "live toolsSha256 与 CI 期望值不等",
+      "command": "node gates/selftest.mjs --case tools-hash-mismatch",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.4",
+      "case": "出口国家缺失（日志没打 country 却判 0.4 过）",
+      "command": "node gates/selftest.mjs --case egress-missing",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.8",
+      "case": "工具顺序换成资产键序（线上是字母序，键序只是取源顺序）",
+      "command": "node gates/selftest.mjs --case tool-order-swapped",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.1",
+      "case": "job 红了却不签豁免（red run 直接当证据）",
+      "command": "node gates/selftest.mjs --case failure-no-waiver",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.8",
+      "case": "锁文件里改一个 hex（0.8 只认格式、不认锁就会放行）",
+      "command": "node gates/selftest.mjs --case lock-tampered",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.8",
+      "case": "阶段 0 漏掉 0.8 这条闸门",
+      "command": "node gates/selftest.mjs --case missing-gate",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.2",
+      "case": "platform=ios（官方客户端不会发的平台串）",
+      "command": "node gates/selftest.mjs --case platform-ios",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.9",
+      "case": "artifact 只留 7 天",
+      "command": "node gates/selftest.mjs --case retention-short",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.1",
+      "case": "run 由 push 触发",
+      "command": "node gates/selftest.mjs --case event-push",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.1",
+      "case": "repo.commit.sha 与 run.headSha 不一致（拿错 run 的日志）",
+      "command": "node gates/selftest.mjs --case commit-mismatch",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.3",
+      "case": "反向测试自己写着 exitCode=0（门没挡住也算证据）",
+      "command": "node gates/selftest.mjs --case negative-exitcode-zero",
+      "exitCode": 1
+    },
+    {
+      "gate": "P1",
+      "case": "许可证没有 Ebony-Vinyl 原版权行",
+      "command": "node gates/selftest.mjs --case p1-fake-license",
+      "exitCode": 1
+    },
+    {
+      "gate": "P2",
+      "case": "API 返回 private:true（拿私库冒充公开）",
+      "command": "node gates/selftest.mjs --case p2-private-repo",
+      "exitCode": 1
+    },
+    {
+      "gate": "P3",
+      "case": "历史里出现 token 形态（grep 数不该放过）",
+      "command": "node gates/selftest.mjs --case p3-token-in-history",
+      "exitCode": 1
+    }
+  ],
+  "producedBy": {
+    "bot": "总策划",
+    "at": "2026-11-24T05:36:40.508Z"
+  }
+}

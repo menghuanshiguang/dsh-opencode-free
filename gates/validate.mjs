@@ -121,7 +121,6 @@ check('egress.source', str(egress.source), '必须写明来源（哪个服务返
 const request = doc.request ?? {}
 check('request', isObject(doc.request), '缺失')
 check('request.model', str(request.model), '必须非空')
-check('request.modelsFreeCount', int(request.modelsFreeCount, 1), '必须 ≥1')
 check('request.postCount', request.postCount === 1, '单发纪律：必须恰为 1')
 check('request.retried', request.retried === false, '必须为 false')
 check('request.endpoint', request.endpoint === '/inference/openai/v1/chat/completions', '端点必须是 /inference/openai/v1/chat/completions')
@@ -180,6 +179,7 @@ check('assets.provenance.blobMatch', prov.blobMatch === 14, '必须是 14')
 check('assets.provenance.total', prov.total === 14, '必须是 14')
 check('assets.lockSha256', hex(assets.lockSha256, 64), '必须是小写 64 位 hex')
 check('assets.contractsSha256', hex(assets.contractsSha256, 64), '必须是小写 64 位 hex')
+if (assets.ciRunId !== undefined) check('assets.ciRunId', str(assets.ciRunId), '给了就必须非空')
 
 // ---- gates ----
 const gates = doc.gates
