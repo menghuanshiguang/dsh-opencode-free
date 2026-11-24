@@ -73,7 +73,7 @@ const PONG = () => [
   { choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 11, completion_tokens: 1, total_tokens: 12 } },
 ]
 
-test('the outbound body is exactly what applyFingerprint renders, byte for byte', async () => {
+test('I1/C19 the outbound body is exactly what applyFingerprint renders, byte for byte', async () => {
   scenario = PONG
   const caller = { model: FREE, messages: [{ role: 'user', content: 'hi' }], temperature: 0.2 }
   await withGateway(async gateway => {
@@ -93,7 +93,7 @@ test('the outbound body is exactly what applyFingerprint renders, byte for byte'
   assert.deepEqual(JSON.parse(sent.body).tools.map(tool => tool.function.name), [...V2_OFFICIAL_TOOL_ORDER])
 })
 
-test('the advertised model count is the runtime observation, not a constant', async () => {
+test('C4 the advertised model count is the runtime observation, not a constant', async () => {
   await withGateway(async gateway => {
     const response = await fetch(`${gateway.url}/models`)
     const listing = await response.json()
@@ -106,7 +106,7 @@ test('the advertised model count is the runtime observation, not a constant', as
   })
 })
 
-test('a streaming tool call comes back under the caller’s own tool name', async () => {
+test('C13/C20 a streaming tool call comes back under the caller’s own tool name', async () => {
   scenario = () => {
     // The name the caller's tool was renamed to on the way out — read off the
     // request the stand-in actually received, never guessed here.
@@ -143,7 +143,7 @@ test('a streaming tool call comes back under the caller’s own tool name', asyn
   assert.equal(callerWire.length, 1, 'the caller tool was renamed on the way out')
 })
 
-test('an aggregated tool call is returned with its name restored and finish_reason tool_calls', async () => {
+test('C8/C20 an aggregated tool call is returned with its name restored and finish_reason tool_calls', async () => {
   scenario = () => {
     const wireName = declared.find(name => !V2_OFFICIAL_TOOL_ORDER.includes(name)) ?? 'read'
     answeredAs.push(wireName)
@@ -167,11 +167,11 @@ test('an aggregated tool call is returned with its name restored and finish_reas
     assert.equal(result.choices[0].finish_reason, 'tool_calls')
     assert.equal(result.choices[0].message.tool_calls[0].function.name, 'Read')
     assert.equal(result.choices[0].message.tool_calls[0].function.arguments, '{"path":"x.md"}')
-    assert.equal(result.choices[0].message.content, null)
+    assert.equal(result.choices[0].message.content, '', 'C7 keeps content a string even beside tool_calls')
   })
 })
 
-test('the stand-in saw exactly one request per turn — no retry, no probe', async () => {
+test('I2 the stand-in saw exactly one request per turn — no retry, no probe', async () => {
   seen.length = 0
   scenario = PONG
   await withGateway(async gateway => {
