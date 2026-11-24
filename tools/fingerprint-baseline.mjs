@@ -72,7 +72,6 @@ const baseline = {
   toolNames: tools.map(tool => tool?.function?.name),
   toolsSha256: sha(JSON.stringify(tools)),
   normalisedSystemPrompt: { bytes: Buffer.byteLength(normalised), sha256: sha(normalised) },
-  rawSystemPromptBytes: Buffer.byteLength(rawPrompt),
   shellDescriptionPrefix: shellPrefix,
 }
 

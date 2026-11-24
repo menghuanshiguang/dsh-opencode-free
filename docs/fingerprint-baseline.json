@@ -1,5 +1,5 @@
 {
-  "note": "Generated on ubuntu-latest by tools/fingerprint-baseline.mjs (CI run 45332305427, sha a88a5fd). Committed as the runner baseline; CI now asserts against it instead of computing its own expectation.",
+  "note": "Generated on ubuntu-latest by tools/fingerprint-baseline.mjs. cwd and date are masked, and the raw byte count is not locked (it follows the working directory; the normalised hash already covers the content). CI and both fingerprint steps assert against this file.",
   "model": "nemotron-3.5-lightning-free",
   "platform": "linux",
   "clientVersion": "2.2.3",
@@ -34,6 +34,5 @@
     "bytes": 2007,
     "sha256": "24f1d1d475e1abc4e43ecd22d9caa7f27397bdce5d091247c4e8551a2565f2e7"
   },
-  "rawSystemPromptBytes": 2104,
   "shellDescriptionPrefix": "Commands run on Linux using bash."
 }
