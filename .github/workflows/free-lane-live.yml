@@ -154,9 +154,15 @@ jobs:
           OFM_WIRE_DIR: ${{ runner.temp }}/wire
         run: |
           set -euo pipefail
-          cd upstream
+          # The shipped path, not a side door: the package's own gateway starts on
+          # loopback and this drives it like a client. Two preloads observe the
+          # same turn — the wire tap records the serialised body, and the transport
+          # observer records the Bun worker's pid — so gates 0.3 and 0.7 read
+          # observations instead of inferring from what the runner installed.
+          test -x "$(command -v bun)"
           node --import "$GITHUB_WORKSPACE/tools/capture-wire.mjs" \
-            scripts/oc-free-live-test.mjs --live --model "${{ inputs.model }}" \
+               --import "$GITHUB_WORKSPACE/tools/observe-transport.mjs" \
+               scripts/live-test.mjs --live --model "${{ inputs.model }}" \
             | tee "$RUNNER_TEMP/live.json"
 
       - name: report the wire capture

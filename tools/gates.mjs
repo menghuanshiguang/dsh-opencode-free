@@ -19,7 +19,7 @@ const readEnvFile = path => {
 }
 
 /** Build the gate record from already-parsed inputs. Pure; no filesystem reads. */
-export function buildGates({ fields = null, live = null, wire = { requests: 0, bodies: [] }, egress = {}, env = {}, expectedToolsSha256 = null } = {}) {
+export function buildGates({ fields = null, live = null, wire = { requests: 0, bodies: [], transports: [] }, egress = {}, env = {}, expectedToolsSha256 = null } = {}) {
   const checks = {}
   const check = (name, pass, detail) => { checks[name] = { pass: !!pass, ...(detail === undefined ? {} : { detail }) } }
   const bunVersion = env.GATES_BUN_VERSION ?? ''
@@ -28,19 +28,36 @@ export function buildGates({ fields = null, live = null, wire = { requests: 0, b
   check('0.1-confirm', env.GATES_CONFIRM === 'true', env.GATES_CONFIRM)
   check('0.2-ubuntu-latest', String(env.RUNNER_OS ?? '').toLowerCase() === 'linux', env.RUNNER_OS)
   check('0.2-bun-version', bunVersion.length > 0, bunVersion)
-  // `transport` is resolved from the lane's own Bun discovery, not observed on the
-  // wire. 督查's ruling: it counts only when a POST actually went out, because
-  // auto mode throws when Bun is missing instead of falling back to node — so
-  // "env unset + bun present + postCount>=1" is the observable form of "Bun only".
+  // 督查's ruling (2026-11-24): the transport is what the code that sent the
+  // request recorded, never what the runner had installed. The live script writes
+  // that observation (src/egress.js), and the spawn preload records the worker
+  // child's pid; both have to agree, and at least one request must have gone out.
+  // A `derived` record — the shape stage 0 produced — fails here by design.
+  const observed = live?.transport ?? null
+  const observedBasis = observed?.basis === 'observed'
+  const workerPid = observed?.worker?.pid ?? null
+  const observationDetail = observed === null
+    ? 'no transport observation in live.json (derived stays derived)'
+    : `observed=${observed.observed ?? 'none'} basis=${observed.basis ?? 'none'} requests=${observed.requests ?? '?'} workerPid=${workerPid ?? 'none'} spawns=${observed.spawns ?? 0}`
   check('0.3-transport-bun',
-    fields?.transport?.resolved === 'bun' && bunVersion.length > 0 && wire.requests >= 1,
-    `${fields?.transport?.resolved ?? '?'} / bunVersion=${bunVersion || '(empty)'} / postCount=${wire.requests}`)
+    observedBasis && observed.observed === 'bun' && Number.isInteger(observed.requests) && observed.requests >= 1
+      && workerPid !== null && bunVersion.length > 0,
+    observationDetail)
+  check('0.3-transport-observed',
+    observedBasis,
+    observedBasis ? 'live.json carries basis=observed' : 'live.json carries no observation (derived)')
+  check('0.3-worker-spawn-recorded',
+    Array.isArray(wire.transports) && wire.transports.some(entry => entry?.kind === 'spawn' && entry?.transport === 'bun'),
+    `${Array.isArray(wire.transports) ? wire.transports.length : 0} spawn record(s) in the capture`)
   check('0.3-no-node-transport', (env.OUR_FREE_MODEL_FREE_TRANSPORT ?? '') === '', env.OUR_FREE_MODEL_FREE_TRANSPORT ?? '(unset)')
   check('0.4-egress', Boolean(egress.egressIp) && Boolean(egress.country), `${egress.egressIp ?? '?'} / ${egress.country ?? '?'}`)
   check('0.5-200-pong', live?.ok === true && live?.status === 200 && String(live?.reply ?? '').trim() === 'PONG', live?.status)
   check('0.6-billing-source', Boolean(live?.billingSource), live?.billingSource ?? null)
-  check('0.7-single-request', wire.requests === 1, wire.requests)
-  check('0.7-no-retry', (live?.retried ?? false) === false && wire.requests <= 1, live?.retried ?? false)
+  // The count is the observed one when there is an observation; the wire tap stays
+  // as the cross-check (it records the serialised body the lane sent).
+  const postCount = observedBasis && Number.isInteger(observed?.requests) ? observed.requests : wire.requests
+  check('0.7-single-request', postCount === 1, postCount)
+  check('0.7-no-retry', (live?.retried ?? false) === false && postCount <= 1, live?.retried ?? false)
   // 督查's ruling: 0.8 is a comparison, not a format check. The lock is validated by
   // free-lane-ci on the same commit, so equality here is transitive evidence — and
   // any 64-hex string no longer passes. The reverse fixture flips one digit.
@@ -70,8 +87,22 @@ export function buildGates({ fields = null, live = null, wire = { requests: 0, b
       bunVersion: bunVersion || null,
       bunPath: env.OUR_FREE_MODEL_BUN ?? null,
       transportEnv: env.OUR_FREE_MODEL_FREE_TRANSPORT ?? '',
-      transport: fields?.transport?.resolved ?? null,
-      transportDerived: true,
+      transport: observedBasis ? observed.observed : (fields?.transport?.resolved ?? null),
+      transportBasis: observedBasis ? 'observed' : 'derived',
+      transportDerived: !observedBasis,
+      // The archive schema 总策划 froze: four keys, written by the code that sent,
+      // read back from the capture. `implementation` comes from the egress record,
+      // the pid from the spawn observer, the version from asking the executable,
+      // and `source` names both capture files so a reader can go and look.
+      transportObserved: observedBasis
+        ? {
+          implementation: observed.observed === 'bun' ? 'bun-worker' : 'node-fetch',
+          pid: workerPid,
+          version: observed.worker?.version ?? null,
+          source: `live.json transport (src/egress.js) + ${join('wire', 'transport.jsonl')} spawn record`,
+        }
+        : null,
+      transportObservation: observedBasis ? observed : null,
     },
     model: live?.model ?? fields?.model ?? null,
     ok: live?.ok ?? null,
@@ -81,7 +112,7 @@ export function buildGates({ fields = null, live = null, wire = { requests: 0, b
     elapsedMs: live?.elapsedMs ?? null,
     chunks: live?.chunks ?? null,
     retried: live?.retried ?? false,
-    postCount: wire.requests,
+    postCount,
     egressIp: egress.egressIp ?? null,
     country: egress.country ?? null,
     colo: egress.colo ?? null,
@@ -102,10 +133,15 @@ export function buildGates({ fields = null, live = null, wire = { requests: 0, b
 /** Read the run's files off disk and build the record. */
 export function readGatesInputs({ fieldsPath, livePath, egressPath, wireDir, lockPath }) {
   const readJson = path => { try { return path && existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null } catch { return null } }
-  let wire = { requests: 0, bodies: [] }
+  let wire = { requests: 0, bodies: [], transports: [] }
   if (wireDir && existsSync(join(wireDir, 'wire.jsonl'))) {
     const records = readFileSync(join(wireDir, 'wire.jsonl'), 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line))
-    wire = { requests: records.filter(record => record.kind === 'request').length, bodies: records.filter(record => record.kind === 'response') }
+    wire = { requests: records.filter(record => record.kind === 'request').length, bodies: records.filter(record => record.kind === 'response'), transports: [] }
+  }
+  if (wireDir && existsSync(join(wireDir, 'transport.jsonl'))) {
+    wire.transports = readFileSync(join(wireDir, 'transport.jsonl'), 'utf8').split('\n').filter(Boolean).map(line => {
+      try { return JSON.parse(line) } catch { return null }
+    }).filter(Boolean)
   }
   const lock = readJson(lockPath)
   return { fields: readJson(fieldsPath), live: readJson(livePath), wire, egress: readEnvFile(egressPath), env: process.env, expectedToolsSha256: lock?.toolsSha256 ?? null }

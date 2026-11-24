@@ -35,11 +35,26 @@ const perfectFields = {
   transport: { env: '(unset)', bun: '/home/runner/.bun/bin/bun', resolved: 'bun' },
 }
 
-const perfectLive = { model: 'nemotron-3.5-lightning-free', ok: true, status: 200, reply: 'PONG', billingSource: 'free', elapsedMs: 1723, chunks: 37 }
+// The transport observation is part of a perfect run now (督查 2026-11-24): the
+// code that sent the request records which implementation it used, the worker's
+// pid and the version the executable reports. A `derived` transport is the stage-0
+// shape and must fail 0.3 — the case below keeps that red side honest.
+const observedTransport = {
+  observed: 'bun',
+  basis: 'observed',
+  requests: 1,
+  last: { method: 'POST', at: '2026-11-24T05:26:03.000Z', status: 200, elapsedMs: 631 },
+  worker: { pid: 4242, command: '/home/runner/.bun/bin/bun', version: '1.4.5', observerPid: 4200 },
+  spawns: 1,
+}
+const perfectLive = { model: 'nemotron-3.5-lightning-free', ok: true, status: 200, reply: 'PONG', billingSource: 'free', elapsedMs: 1723, chunks: 37, retried: false, transport: observedTransport }
+/** The stage-0 shape: transport described, never observed. */
+const derivedLive = { ...perfectLive, transport: { observed: 'bun', basis: 'derived', requests: 1, worker: { pid: 4242 } } }
 const egress = { egressIp: '48.214.54.99', country: 'US', colo: 'IAD' }
 const lockSha = perfectFields.toolsSha256
-const sent = { requests: 1, bodies: [] }
-const nothing = { requests: 0, bodies: [] }
+const spawnRecord = { kind: 'spawn', transport: 'bun', pid: 4242, command: '/home/runner/.bun/bin/bun', argv: ['/home/runner/.dsh/opencode-free/run/worker.mjs'] }
+const sent = { requests: 1, bodies: [], transports: [spawnRecord] }
+const nothing = { requests: 0, bodies: [], transports: [] }
 
 let failed = 0
 const run = (label, args) => {
@@ -53,6 +68,25 @@ const run = (label, args) => {
   const result = run('positive', { fields: perfectFields, live: perfectLive, wire: sent, egress, env: { ...baseEnv }, expectedToolsSha256: lockSha })
   const ok = result.passed
   console.log(`${ok ? 'PASS' : 'FAIL'} positive: a complete 200 passes all ${Object.keys(result.gates.checks).length} checks${ok ? '' : ` — failing: ${result.bad.join(', ')}`}`)
+  if (!ok) failed += 1
+}
+
+// 1b. The transport observation has its own red side: the stage-0 shape (derived)
+// must fail 0.3 even though every other field of the run is perfect.
+{
+  const result = run('derived-transport', { fields: perfectFields, live: derivedLive, wire: sent, egress, env: { ...baseEnv }, expectedToolsSha256: lockSha })
+  const ok = !result.gates.checks['0.3-transport-bun'].pass && !result.gates.checks['0.3-transport-observed'].pass
+  console.log(`${ok ? 'PASS' : 'FAIL'} derived-transport: a derived transport fails 0.3 by design${ok ? '' : ` — 0.3 says: ${JSON.stringify(result.gates.checks['0.3-transport-bun'])}`}`)
+  if (!ok) failed += 1
+}
+
+// 1c. And the node-branch shape: an observation that says node must fail too, so
+// "recorded" alone is not enough — the recorded transport has to be the Bun worker.
+{
+  const nodeLive = { ...perfectLive, transport: { ...observedTransport, observed: 'node' } }
+  const result = run('node-transport', { fields: perfectFields, live: nodeLive, wire: sent, egress, env: { ...baseEnv }, expectedToolsSha256: lockSha })
+  const ok = !result.gates.checks['0.3-transport-bun'].pass
+  console.log(`${ok ? 'PASS' : 'FAIL'} node-transport: an observed node transport fails 0.3${ok ? '' : ' — it passed, which it must not'}`)
   if (!ok) failed += 1
 }
 
@@ -72,8 +106,14 @@ const run = (label, args) => {
     fields: { ...perfectFields, transport: { env: 'node', bun: '/home/runner/.bun/bin/bun', resolved: 'node' } },
     live: perfectLive, wire: sent, egress, env: { ...baseEnv, OUR_FREE_MODEL_FREE_TRANSPORT: 'node' }, expectedToolsSha256: lockSha,
   })
-  const ok = result.gates.checks['0.3-transport-bun']?.pass === false && result.gates.checks['0.3-no-node-transport']?.pass === false
-  console.log(`${ok ? 'PASS' : 'FAIL'} negative-node: OUR_FREE_MODEL_FREE_TRANSPORT=node fails 0.3`)
+  // With an observed transport, 0.3-transport-bun reads the observation, so this
+  // fixture asserts the two checks that are about the environment and the recorded
+  // branch: the override switch must be unset, and a run whose observation says
+  // `node` must not pass transport-bun.
+  const nodeObserved = run('negative-node-observed', { fields: perfectFields, live: { ...perfectLive, transport: { ...observedTransport, observed: 'node' } }, wire: sent, egress, env: { ...baseEnv, OUR_FREE_MODEL_FREE_TRANSPORT: 'node' }, expectedToolsSha256: lockSha })
+  const ok = result.gates.checks['0.3-no-node-transport']?.pass === false
+    && nodeObserved.gates.checks['0.3-transport-bun']?.pass === false
+  console.log(`${ok ? 'PASS' : 'FAIL'} negative-node: OUR_FREE_MODEL_FREE_TRANSPORT=node fails the override check, and a node observation fails 0.3`)
   if (!ok) failed += 1
 }
 
