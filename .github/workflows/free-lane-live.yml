@@ -133,7 +133,7 @@ jobs:
       # dump taken inside `upstream/` describes a body the gateway (running from the
       # repository root) never sends. 督查's ruling: align the cwds — a mismatch must
       # keep failing step 13, not be normalised away.
-      - name: fingerprint fields (same cwd as the live call: repository root)
+      - name: 'fingerprint fields (same cwd as the live call, the repository root)'
         env:
           OFM_UPSTREAM_DIR: ${{ github.workspace }}/upstream
         run: |
