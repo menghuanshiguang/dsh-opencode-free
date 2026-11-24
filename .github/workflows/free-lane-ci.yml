@@ -289,6 +289,11 @@ jobs:
       - name: npm run typecheck
         run: npm run typecheck
 
+      - name: the archive sequence is one script, and it fails where it should
+        run: |
+          set -euo pipefail
+          node gates/check-archive-script.mjs | tee archive-script.txt
+
       - name: rehearsal assertions bite (postCount is a number, gates are parsed)
         run: |
           set -euo pipefail
@@ -394,6 +399,7 @@ jobs:
             gateway-contract.txt
             live-artifact.txt
             rehearsal.txt
+            archive-script.txt
             year-clock-today.txt
             year-clock-2027.txt
           retention-days: 30
