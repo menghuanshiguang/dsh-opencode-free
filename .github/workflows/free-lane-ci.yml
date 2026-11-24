@@ -7,6 +7,9 @@ name: free-lane-ci
 on:
   push:
     branches: ['**']
+    # Stage 5 ships a tag and wants CI green on it. Without this trigger a tag
+    # push starts nothing, so "green on the tag" would be unobservable.
+    tags: ['v*']
   pull_request:
 
 permissions:
@@ -14,7 +17,9 @@ permissions:
 
 concurrency:
   group: free-lane-ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A superseded branch run is noise; a superseded tag run is a missing receipt.
+  # Tag refs always run to completion, so the release tag's result exists.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 env:
   UPSTREAM_REPO: Ebony-Vinyl/dsh-our-free-model
@@ -30,6 +35,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          # The baseline-import check reads the trees at c18b290, so this job
+          # needs the history rather than a single-commit clone.
+          fetch-depth: 0
 
       - uses: actions/checkout@v4
         with:
@@ -48,6 +56,11 @@ jobs:
           head=$(git -C upstream rev-parse HEAD)
           echo "upstream HEAD: $head"
           test "$head" = "$UPSTREAM_SHA"
+
+      - name: baseline import (set equality, read from the git trees)
+        run: |
+          set -euo pipefail
+          node acceptance/verify-baseline-import.mjs --repo . --upstream upstream --baseline c18b290 | tee verify-baseline-import.txt
 
       - name: contract check (13 tool contracts + system prompt)
         run: |
@@ -90,14 +103,29 @@ jobs:
             node --import "$GITHUB_WORKSPACE/tools/guard-offline.mjs" "scripts/$suite.mjs"
           done | tee "$GITHUB_WORKSPACE/suites.txt"
 
-      - name: assert no inference request was attempted
+      - name: count the off-loopback attempts (zero, and show the detector was on)
         run: |
-          set -euo pipefail
-          if grep -q 'BLOCKED' suites.txt; then
+          set -uo pipefail
+          suites=$(grep -c '^=== ' suites.txt || true)
+          guards=$(grep -c 'no off-loopback request was attempted' suites.txt || true)
+          blocked=$(grep -c 'BLOCKED' suites.txt || true)
+          {
+            echo "suites run:                    $suites"
+            echo "guard reported clean:          $guards"
+            echo "off-loopback attempts blocked: $blocked"
+            echo "OFFLINE REQUESTS: $blocked"
+          } | tee offline-requests.txt
+          # A zero means nothing unless the detector was running: every suite must
+          # have loaded the guard and reported its own clean exit line.
+          if [ "$blocked" -ne 0 ]; then
             echo "::error::a suite tried to leave loopback — the guard stopped it, fix the suite"
             exit 1
           fi
-          grep -c 'no off-loopback request was attempted' suites.txt || true
+          if [ "$suites" -eq 0 ] || [ "$guards" -ne "$suites" ]; then
+            echo "::error::guard clean lines ($guards) != suites ($suites) — the guard did not run for every suite, so this zero is not evidence"
+            exit 1
+          fi
+          echo "OFFLINE REQUESTS: 0 observed, guard armed on $guards/$suites suites"
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -111,6 +139,8 @@ jobs:
             gates-archive-validate.txt
             baseline.json
             suites.txt
+            offline-requests.txt
+            verify-baseline-import.txt
           retention-days: 30
 
   assets:

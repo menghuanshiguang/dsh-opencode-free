@@ -15,21 +15,61 @@
     "files": 7,
     "bytes": 211307,
     "entries": [
-      { "path": "src/bun-fetch.js", "blob": "afd13bfa85b60e5816df0bbbd6d2971e3c0f1b42", "bytes": 8958 },
-      { "path": "src/egress.js", "blob": "257fbcf219db4face6537fa7792b2a175bb33389", "bytes": 65793 },
-      { "path": "src/http.js", "blob": "dbe915eede1b8e8b49ebc07bd3f0d0cbda681f5a", "bytes": 34582 },
-      { "path": "src/o2a.js", "blob": "40457913e60ff620b1593c73e498b7a52f5c09ce", "bytes": 49383 },
-      { "path": "src/open-external.js", "blob": "95929b155c6932aeac4714032c4da40acc34c7ae", "bytes": 4234 },
-      { "path": "src/store.js", "blob": "e0c1cbdee34d20f87d1e7b768f6aaffadc5d7075", "bytes": 27185 },
-      { "path": "src/upstream.js", "blob": "1279b607672e80589024a3b69abfda889c4afab0", "bytes": 21172 }
+      {
+        "path": "src/bun-fetch.js",
+        "blob": "afd13bfa85b60e5816df0bbbd6d2971e3c0f1b42",
+        "bytes": 8958
+      },
+      {
+        "path": "src/egress.js",
+        "blob": "257fbcf219db4face6537fa7792b2a175bb33389",
+        "bytes": 65793
+      },
+      {
+        "path": "src/http.js",
+        "blob": "dbe915eede1b8e8b49ebc07bd3f0d0cbda681f5a",
+        "bytes": 34582
+      },
+      {
+        "path": "src/o2a.js",
+        "blob": "40457913e60ff620b1593c73e498b7a52f5c09ce",
+        "bytes": 49383
+      },
+      {
+        "path": "src/open-external.js",
+        "blob": "95929b155c6932aeac4714032c4da40acc34c7ae",
+        "bytes": 4234
+      },
+      {
+        "path": "src/store.js",
+        "blob": "e0c1cbdee34d20f87d1e7b768f6aaffadc5d7075",
+        "bytes": 27185
+      },
+      {
+        "path": "src/upstream.js",
+        "blob": "1279b607672e80589024a3b69abfda889c4afab0",
+        "bytes": 21172
+      }
     ],
     "note": "从 src/upstream.js 起的相对 import 闭包，导入那一刻 7 个文件逐 blob 与 f29116ba 相等。catalog.js 不是它的依赖（曾误算为 8）。抽取发生在这之后，7 个文件各自的状态见 shipped。"
   },
   "shipped": {
-    "verbatim": ["src/bun-fetch.js", "src/http.js", "src/o2a.js", "src/upstream.js"],
-    "adapted": ["src/egress.js", "src/store.js"],
-    "removed": ["src/open-external.js"],
-    "added": ["src/gateway.js"],
+    "verbatim": [
+      "src/bun-fetch.js",
+      "src/http.js",
+      "src/o2a.js",
+      "src/upstream.js"
+    ],
+    "adapted": [
+      "src/egress.js",
+      "src/store.js"
+    ],
+    "removed": [
+      "src/open-external.js"
+    ],
+    "added": [
+      "src/gateway.js"
+    ],
     "note": "4 个逐字节未动 + 2 个按 docs/adaptations.json 申报改写 + 1 个申报删除 = 导入时的 7 个；再加一个自有入口 src/gateway.js，src/ 下共 7 个模块。改写与删除的理由只在 docs/adaptations.json 一处，本文件不复述，避免两处漂移。"
   },
   "imported": {
@@ -83,7 +123,24 @@
     "script": "gates/check-newline-policy.mjs",
     "base": "baselineImport.commit",
     "command": "node gates/check-newline-policy.mjs",
-    "note": "工具路径自身怎么长不受限（闸门与测试就该长），受管的是从基线提交带过来的代码：它们要长行必须先在 docs/adaptations.json 有带理由的申报，否则 FAIL。"
+    "note": "工具路径自身怎么长不受限（闸门与测试就该长），受管的是从基线提交带过来的代码：它们要长行必须先在 docs/adaptations.json 有带理由的申报，否则 FAIL。",
+    "classes": {
+      "tool": [
+        "scripts/",
+        "docs/",
+        ".github/",
+        "gates/",
+        "acceptance/",
+        "tools/"
+      ],
+      "productMetadata": [
+        "package.json",
+        "README.md",
+        ".gitignore",
+        "LICENSE"
+      ]
+    },
+    "classesNote": "这两个路径清单是唯一来源：gates/check-newline-policy.mjs 从本文件读取，不硬编码。另两类由数据推导——declared-adaptation 取 docs/adaptations.json 的 adapted，new-module 取本文件 imported.files + publicExports.entry 里基线不存在的那一个。改这里的清单要单独 commit 并说明。"
   },
   "pluginForm": "removed",
   "productInternalModules": {

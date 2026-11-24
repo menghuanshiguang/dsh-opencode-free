@@ -52,8 +52,21 @@ const ADAPTATIONS = join(ROOT, 'docs/adaptations.json')
 const whitelist = existsSync(WHITELIST) ? readJson(WHITELIST) : die('missing gates/extraction-whitelist.json')
 const adaptations = existsSync(ADAPTATIONS) ? readJson(ADAPTATIONS) : { adapted: [], removed: [] }
 
-const TOOL_PREFIXES = ['scripts/', 'docs/', '.github/', 'gates/', 'acceptance/', 'tools/']
-const PRODUCT_FILES = ['package.json', 'README.md', '.gitignore', 'LICENSE']
+// The two path lists live in gates/extraction-whitelist.json, so the ruling has
+// one source and the document quotes it rather than repeating it. A class this
+// gate does not implement is a FAIL: a typo must not silently widen the allowlist.
+const KNOWN_CLASSES = new Set(['tool', 'productMetadata'])
+const CLASSES = whitelist.newLinePolicy?.classes
+if (!CLASSES || typeof CLASSES !== 'object') {
+  die('gates/extraction-whitelist.json has no newLinePolicy.classes — the paths this rule allows must be declared there')
+}
+for (const name of Object.keys(CLASSES)) {
+  if (!KNOWN_CLASSES.has(name)) die(`newLinePolicy.classes has an unknown class ${JSON.stringify(name)}; known: ${[...KNOWN_CLASSES].join(', ')}`)
+}
+const TOOL_PREFIXES = CLASSES.tool ?? []
+const PRODUCT_FILES = CLASSES.productMetadata ?? []
+if (TOOL_PREFIXES.length === 0) die('newLinePolicy.classes.tool is empty — every path would be a violation')
+if (PRODUCT_FILES.length === 0) die('newLinePolicy.classes.productMetadata is empty — package.json could never change')
 const MODULE_DIRS = ['src/']
 
 const isTool = path => TOOL_PREFIXES.some(prefix => path.startsWith(prefix))
@@ -166,6 +179,7 @@ const sum = list => list.reduce((total, item) => total + item.added, 0)
 const summary = {
   base: resolvedBase,
   head: resolvedHead,
+  classes: { tool: TOOL_PREFIXES, productMetadata: PRODUCT_FILES },
   addedTotal: rows.reduce((total, row) => total + row.added, 0),
   deletedTotal: rows.reduce((total, row) => total + row.deleted, 0),
   buckets: Object.fromEntries(Object.entries(buckets).map(([name, list]) => [name, { paths: list.length, added: sum(list), list }])),
@@ -181,6 +195,9 @@ if (JSON_OUT) {
 
 console.log(`base ${resolvedBase.slice(0, 7)} .. head ${resolvedHead.slice(0, 7)}`)
 console.log(`lines: +${summary.addedTotal} / -${summary.deletedTotal} across ${rows.length} path(s)`)
+console.log(`classes: tool [${TOOL_PREFIXES.join(' ')}]`)
+console.log(`         product-metadata [${PRODUCT_FILES.join(' ')}]`)
+console.log(`         declared-adaptation ${adaptedPaths.size} declared; a novel src/ module must be one of the ${whitelistedModules.size} modules on the whitelist`)
 for (const [name, bucket] of Object.entries(summary.buckets)) {
   if (bucket.paths === 0) continue
   console.log(`  ${name.padEnd(19)} +${String(bucket.added).padStart(4)}  ${bucket.paths} path(s)`)
