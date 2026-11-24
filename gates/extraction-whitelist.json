@@ -45,5 +45,28 @@
     "exclusions 里任何文件被 imported 代码 import 到即 FAIL（verify-closure）",
     "src/gateway.js 导出恰好 {startGateway, createGateway}，package.json exports 只有 \".\""
   ],
-  "pluginForm": "removed"
+  "pluginForm": "removed",
+  "productInternalModules": {
+    "files": [
+      "src/upstream.js",
+      "src/http.js",
+      "src/egress.js",
+      "src/bun-fetch.js",
+      "src/o2a.js",
+      "src/store.js",
+      "src/gateway.js"
+    ],
+    "note": "抽取后的产品内部模块：6 个上游文件 + 新网关入口 src/gateway.js。src/open-external.js 在抽取中删除（其 restrictPermissions 职责内联），所以不再出现。"
+  },
+  "afterImportChanges": [
+    {
+      "path": "src/open-external.js",
+      "action": "removed",
+      "reason": "restrictPermissions 内联进使用点，文件整体删除；不属于 baseline 导入集的破坏（导入时 7/7 blob 相等，抽取是后续独立改动）"
+    }
+  ],
+  "driftCheck": {
+    "command": "node -e \"…相对 import 解析…\"",
+    "result": "6+1 文件、0 missing、0 excluded import"
+  }
 }
