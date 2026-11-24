@@ -1,0 +1,52 @@
+{
+  "ok": true,
+  "status": 200,
+  "toolsSha256": "6fb3aed805228cc69ca5e838b7af2fffa9bf57b8c27ebd7606fd94e41c05b77f",
+  "checks": {
+    "0.1-dispatch-only": {
+      "pass": true
+    },
+    "0.1-confirm": {
+      "pass": true
+    },
+    "0.2-ubuntu-latest": {
+      "pass": true
+    },
+    "0.2-bun-version": {
+      "pass": true
+    },
+    "0.3-transport-bun": {
+      "pass": true
+    },
+    "0.3-transport-observed": {
+      "pass": true
+    },
+    "0.3-worker-spawn-recorded": {
+      "pass": true
+    },
+    "0.3-no-node-transport": {
+      "pass": true
+    },
+    "0.4-egress": {
+      "pass": true
+    },
+    "0.5-200-pong": {
+      "pass": true
+    },
+    "0.6-billing-source": {
+      "pass": true
+    },
+    "0.7-single-request": {
+      "pass": true
+    },
+    "0.7-no-retry": {
+      "pass": true
+    },
+    "0.8-tools-sha256": {
+      "pass": true
+    },
+    "0.9-inputs-present": {
+      "pass": true
+    }
+  }
+}

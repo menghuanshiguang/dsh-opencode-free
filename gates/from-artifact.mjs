@@ -69,6 +69,15 @@ const pre = readJson(prePath)
 const waiver = waiverPath ? readJson(waiverPath) : undefined
 const ciRun = ciRunJsonPath ? readJson(ciRunJsonPath) : undefined
 
+// 形状先于内容：扁平摘要（ok/status/checks）不是档案，直接说清楚它缺什么，
+// 而不是让它以 TypeError 的形式崩在后面某一行。
+const need = (obj, keys, what) => {
+  for (const key of keys) if (obj == null || obj[key] === undefined) fail(`${what} 缺 ${key}——live 产物必须是档案形状（request/fingerprint/gates/verdict），不是扁平摘要`)
+}
+need(gates, ['run', 'postCount', 'retried', 'toolsSha256', 'runtime', 'checks'], 'gates.json')
+need(live, ['ok', 'status', 'reply'], 'live.json')
+need(fields, ['toolsSha256', 'endpoint', 'userAgent'], 'fields.json')
+
 // ---- 硬校验：任何一条不成立就不产出档案 ----
 if (run.event !== 'workflow_dispatch') fail(`event=${run.event}`)
 if (String(run.id) !== String(gates.run.id)) fail('run id 与 artifact 里的不一致')

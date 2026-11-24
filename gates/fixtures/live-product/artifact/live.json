@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "status": 200,
+  "reply": "PONG",
+  "billingSource": "free",
+  "elapsedMs": 557,
+  "chunks": 1,
+  "model": "nemotron-3.5-lightning-free"
+}

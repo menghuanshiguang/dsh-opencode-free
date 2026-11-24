@@ -224,7 +224,13 @@ if (Array.isArray(gates)) {
     for (const id of STAGE0_GATES) check('gates', ids.has(id), `阶段 0 缺条目 ${id}`)
     for (const id of ids) check('gates', STAGE0_GATES.has(id), `阶段 0 多出条目 ${id}`)
   } else {
-    for (const id of ids) check('gates', id.startsWith(`${stage}.`), `stage ${stage} 里出现 ${id}，前缀不符`)
+    // 阶段 4 复用的就是 0.1–0.9 这一族检查（同一条判据、同一个名字），所以它带 0.x 是
+    // 语义正确，不是串了阶段；阶段 1–3 没有自己的检查族，仍按前缀判。
+    if (Number(stage) === 4) {
+      for (const id of ids) check('gates', /^(P[1-3]|0\.[0-9]+)$/.test(id), `stage 4 里出现 ${id}：只允许 P1–P3 与 0.1–0.9（阶段 4 复用这一族检查）`)
+    } else {
+      for (const id of ids) check('gates', id.startsWith(`${stage}.`), `stage ${stage} 里出现 ${id}，前缀不符`)
+    }
   }
 }
 

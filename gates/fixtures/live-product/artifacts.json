@@ -1,0 +1,10 @@
+{
+  "artifacts": [
+    {
+      "name": "live-45348584364",
+      "size_in_bytes": 4096,
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expires_at": "2026-12-24T07:31:00Z"
+    }
+  ]
+}

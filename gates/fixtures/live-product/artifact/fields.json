@@ -1,0 +1,5 @@
+{
+  "toolsSha256": "6fb3aed805228cc69ca5e838b7af2fffa9bf57b8c27ebd7606fd94e41c05b77f",
+  "endpoint": "/inference/openai/v1/chat/completions",
+  "userAgent": "opencode/latest/2.2.3/cli"
+}

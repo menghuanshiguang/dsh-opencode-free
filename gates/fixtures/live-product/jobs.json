@@ -1,0 +1,16 @@
+{
+  "jobs": [
+    {
+      "name": "live",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "steps": [
+        {
+          "name": "live request (the one dispatch)",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ]
+}

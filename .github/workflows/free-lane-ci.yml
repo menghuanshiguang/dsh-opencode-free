@@ -243,6 +243,9 @@ jobs:
       - name: npm run typecheck
         run: npm run typecheck
 
+      - name: a live product must archive (fixture; schema untouched)
+        run: node gates/check-live-artifact.mjs | tee live-artifact.txt
+
       - name: gateway contract (the verifier's bench, under the guard)
         run: |
           set -uo pipefail
@@ -336,6 +339,7 @@ jobs:
             extraction.txt
             newline-policy.txt
             gateway-contract.txt
+            live-artifact.txt
             year-clock-today.txt
             year-clock-2027.txt
           retention-days: 30

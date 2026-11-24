@@ -1,0 +1,76 @@
+{
+  "negativeTests": [
+    {
+      "gate": "P1",
+      "case": "P1 \u7684\u53cd\u5411\u8f93\u5165",
+      "command": "node gates/selftest.mjs --case P1",
+      "exitCode": 1
+    },
+    {
+      "gate": "P2",
+      "case": "P2 \u7684\u53cd\u5411\u8f93\u5165",
+      "command": "node gates/selftest.mjs --case P2",
+      "exitCode": 1
+    },
+    {
+      "gate": "P3",
+      "case": "P3 \u7684\u53cd\u5411\u8f93\u5165",
+      "command": "node gates/selftest.mjs --case P3",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.1",
+      "case": "0.1 \u7684\u53cd\u5411\u8f93\u5165",
+      "command": "node gates/selftest.mjs --case 0.1",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.2",
+      "case": "0.2 \u7684\u53cd\u5411\u8f93\u5165",
+      "command": "node gates/selftest.mjs --case 0.2",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.3",
+      "case": "0.3 \u7684\u53cd\u5411\u8f93\u5165",
+      "command": "node gates/selftest.mjs --case 0.3",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.4",
+      "case": "0.4 \u7684\u53cd\u5411\u8f93\u5165",
+      "command": "node gates/selftest.mjs --case 0.4",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.5",
+      "case": "0.5 \u7684\u53cd\u5411\u8f93\u5165",
+      "command": "node gates/selftest.mjs --case 0.5",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.6",
+      "case": "0.6 \u7684\u53cd\u5411\u8f93\u5165",
+      "command": "node gates/selftest.mjs --case 0.6",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.7",
+      "case": "0.7 \u7684\u53cd\u5411\u8f93\u5165",
+      "command": "node gates/selftest.mjs --case 0.7",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.8",
+      "case": "0.8 \u7684\u53cd\u5411\u8f93\u5165",
+      "command": "node gates/selftest.mjs --case 0.8",
+      "exitCode": 1
+    },
+    {
+      "gate": "0.9",
+      "case": "0.9 \u7684\u53cd\u5411\u8f93\u5165",
+      "command": "node gates/selftest.mjs --case 0.9",
+      "exitCode": 1
+    }
+  ]
+}

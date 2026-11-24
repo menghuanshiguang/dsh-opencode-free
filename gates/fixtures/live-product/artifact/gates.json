@@ -1,0 +1,104 @@
+{
+  "generatedAt": "2026-11-24T07:30:56.000Z",
+  "run": {
+    "id": 45348584364
+  },
+  "postCount": 1,
+  "retried": false,
+  "toolCount": 13,
+  "toolNames": [
+    "edit",
+    "glob",
+    "grep",
+    "patch",
+    "question",
+    "read",
+    "shell",
+    "skill",
+    "subagent",
+    "todowrite",
+    "webfetch",
+    "websearch",
+    "write"
+  ],
+  "toolsSha256": "6fb3aed805228cc69ca5e838b7af2fffa9bf57b8c27ebd7606fd94e41c05b77f",
+  "systemPromptBytes": 2007,
+  "systemPromptSha256": "24f1d1d475e1abc4e43ecd22d9caa7f27397bdce5d091247c4e8551a2565f2e7",
+  "runtime": {
+    "bunVersion": "1.4.5",
+    "node": "v24.22.3",
+    "transport": "bun",
+    "transportDerived": false,
+    "transportEnv": "",
+    "platform": "linux",
+    "bunPath": "/home/runner/.bun/bin/bun",
+    "transportObserved": {
+      "implementation": "bun-worker",
+      "pid": 2782,
+      "version": "1.4.5",
+      "source": "live.json transport + $OFM_WIRE_DIR/transport.jsonl"
+    }
+  },
+  "checks": {
+    "0.1-dispatch-only": {
+      "pass": true,
+      "detail": "0.1-dispatch-only: ok"
+    },
+    "0.1-confirm": {
+      "pass": true,
+      "detail": "0.1-confirm: ok"
+    },
+    "0.2-ubuntu-latest": {
+      "pass": true,
+      "detail": "0.2-ubuntu-latest: ok"
+    },
+    "0.2-bun-version": {
+      "pass": true,
+      "detail": "0.2-bun-version: ok"
+    },
+    "0.3-transport-bun": {
+      "pass": true,
+      "detail": "0.3-transport-bun: ok"
+    },
+    "0.3-transport-observed": {
+      "pass": true,
+      "detail": "0.3-transport-observed: ok"
+    },
+    "0.3-worker-spawn-recorded": {
+      "pass": true,
+      "detail": "0.3-worker-spawn-recorded: ok"
+    },
+    "0.3-no-node-transport": {
+      "pass": true,
+      "detail": "0.3-no-node-transport: ok"
+    },
+    "0.4-egress": {
+      "pass": true,
+      "detail": "0.4-egress: ok"
+    },
+    "0.5-200-pong": {
+      "pass": true,
+      "detail": "0.5-200-pong: ok"
+    },
+    "0.6-billing-source": {
+      "pass": true,
+      "detail": "0.6-billing-source: ok"
+    },
+    "0.7-single-request": {
+      "pass": true,
+      "detail": "0.7-single-request: ok"
+    },
+    "0.7-no-retry": {
+      "pass": true,
+      "detail": "0.7-no-retry: ok"
+    },
+    "0.8-tools-sha256": {
+      "pass": true,
+      "detail": "0.8-tools-sha256: ok"
+    },
+    "0.9-inputs-present": {
+      "pass": true,
+      "detail": "0.9-inputs-present: ok"
+    }
+  }
+}

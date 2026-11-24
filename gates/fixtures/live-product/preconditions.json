@@ -1,0 +1,20 @@
+{
+  "pass": true,
+  "results": [
+    {
+      "id": "P1",
+      "pass": true,
+      "detail": "P1: ok"
+    },
+    {
+      "id": "P2",
+      "pass": true,
+      "detail": "P2: ok"
+    },
+    {
+      "id": "P3",
+      "pass": true,
+      "detail": "P3: ok"
+    }
+  ]
+}
