@@ -99,7 +99,9 @@ jobs:
           set -euo pipefail
           cd upstream
           for suite in fingerprint-test opencode-parity-test free-lane-wire-test free-lane-compat-test free-lane-quota-test; do
-            echo "=== $suite ==="
+            # "=== " is also what the suites print for their own headings, so the
+            # marker the counter looks for has to be its own.
+            echo "### suite: $suite"
             # The guard states its verdict on stderr, so the artifact has to hold
             # both streams: a count taken from stdout alone would find no guard
             # lines and could not tell "zero requests" from "no guard at all".
@@ -109,9 +111,9 @@ jobs:
       - name: count the off-loopback attempts (zero, and show the detector was on)
         run: |
           set -uo pipefail
-          suites=$(grep -c '^=== ' suites.txt || true)
-          guards=$(grep -c 'no off-loopback request was attempted' suites.txt || true)
-          blocked=$(grep -c 'BLOCKED' suites.txt || true)
+          suites=$(grep -c '^### suite: ' suites.txt || true)
+          guards=$(grep -c '^\[guard-offline\] no off-loopback request was attempted' suites.txt || true)
+          blocked=$(grep -c '^\[guard-offline\] BLOCKED' suites.txt || true)
           {
             echo "suites run:                    $suites"
             echo "guard reported clean:          $guards"
