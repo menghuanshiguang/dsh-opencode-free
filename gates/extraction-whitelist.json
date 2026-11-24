@@ -57,11 +57,11 @@
     "verbatim": [
       "src/bun-fetch.js",
       "src/http.js",
-      "src/o2a.js",
       "src/upstream.js"
     ],
     "adapted": [
       "src/egress.js",
+      "src/o2a.js",
       "src/store.js"
     ],
     "removed": [
@@ -70,7 +70,7 @@
     "added": [
       "src/gateway.js"
     ],
-    "note": "4 个逐字节未动 + 2 个按 docs/adaptations.json 申报改写 + 1 个申报删除 = 导入时的 7 个；再加一个自有入口 src/gateway.js，src/ 下共 7 个模块。改写与删除的理由只在 docs/adaptations.json 一处，本文件不复述，避免两处漂移。"
+    "note": "3 个逐字节未动 + 3 个申报改写 + 1 个申报删除 = 导入时的 7 个；再加一个自有入口 src/gateway.js，src/ 下共 7 个模块。这三个集合不再是人读的第二份说法：scripts/check-extraction.mjs 的第五族检查把它们与 docs/adaptations.json 及导入集双向比对，同一路径同时出现在 verbatim 与 adapted 里也直接红。理由只在 docs/adaptations.json 一处，本文件不复述。"
   },
   "imported": {
     "count": 6,
@@ -112,7 +112,8 @@
   },
   "criteria": [
     "imported ⊆ upstream：baselineImport 的 7 个文件逐 blob 与字节数等于 f29116ba；排除集 892 条逐条声明，7 + 892 = 899，两集不相交",
-    "抽取后三态齐备：verbatim 的 4 个逐字节未动、adapted 的 2 个在 docs/adaptations.json 有 baselineBlob 与理由且字节确实变了、removed 的 1 个不在工作树里（check-extraction 逐条机判）",
+    "抽取后三态齐备：verbatim 的 3 个逐字节未动、adapted 的 3 个在 docs/adaptations.json 有 baselineBlob 与理由且字节确实变了、removed 的 1 个不在工作树里（check-extraction 逐条机判）",
+    "shipped 与 baselineImport 不再是死键：verbatim/adapted/removed/added 与 docs/adaptations.json 的 adapted/removed、与 manifest 的导入集双向相等，verbatim 恰好是「导入且未申报任何状态」的那批，verbatim ∩ adapted = ∅（check-extraction 第五族，附五个自检用例，删掉这段比对会被点名）",
     "imported 内 src/accounts/providers/、eac*、worker 管理页/统计路由零命中",
     "exclusions 里任何文件被 imported 代码 import 到即 FAIL（verify-closure）",
     "src/gateway.js 导出恰好 {startGateway, createGateway}，package.json exports 只有 \".\"",
