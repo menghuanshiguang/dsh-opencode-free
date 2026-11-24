@@ -128,21 +128,28 @@ jobs:
           test -z "${OUR_FREE_MODEL_FREE_TRANSPORT:-}" || { echo "::error::OUR_FREE_MODEL_FREE_TRANSPORT must stay unset"; exit 1; }
           test -x "$(command -v bun)"
 
-      - name: fingerprint fields (same cwd as the live call)
+      # The dump and the request have to be rendered in the SAME working directory:
+      # the system prompt carries `process.cwd()` in its environment block, so a
+      # dump taken inside `upstream/` describes a body the gateway (running from the
+      # repository root) never sends. 督查's ruling: align the cwds — a mismatch must
+      # keep failing step 13, not be normalised away.
+      - name: fingerprint fields (same cwd as the live call: repository root)
+        env:
+          OFM_UPSTREAM_DIR: ${{ github.workspace }}/upstream
         run: |
           set -euo pipefail
-          cd upstream
-          node ../tools/fingerprint-fields.mjs "${{ inputs.model }}" "$RUNNER_TEMP/fields.json"
+          node tools/fingerprint-fields.mjs "${{ inputs.model }}" "$RUNNER_TEMP/fields.json"
 
       - name: fingerprint baseline must match the committed lock
+        env:
+          OFM_UPSTREAM_DIR: ${{ github.workspace }}/upstream
         run: |
           set -uo pipefail
-          cd upstream
-          node ../tools/fingerprint-baseline.mjs "${{ inputs.model }}" --assert
+          node tools/fingerprint-baseline.mjs "${{ inputs.model }}" --assert
           status=$?
           if [ "$status" -eq 2 ]; then
             echo "::error::no docs/fingerprint-baseline.json — this run publishes the baseline and stops BEFORE spending quota; commit it, then dispatch again"
-            node ../tools/fingerprint-baseline.mjs "${{ inputs.model }}" > "$RUNNER_TEMP/baseline.json"
+            node tools/fingerprint-baseline.mjs "${{ inputs.model }}" > "$RUNNER_TEMP/baseline.json"
             exit 1
           fi
           exit "$status"

@@ -36,6 +36,10 @@ const prePath = arg('--preconditions')
 const waiverPath = arg('--waiver')
 const failedStepReason = arg('--failed-step-reason')
 const outPath = arg('--out')
+// 归档记录里的 stage 一直是写死的 0，这对阶段 0 是对的，对阶段 4 就不行了：
+// 阶段 4 的档案要带观测 transport，而校验器对 stage=0 恰恰拒收 observed。
+const stageArg = arg('--stage') ?? '0'
+if (!['0', '1', '2', '3', '4', '5'].includes(String(stageArg))) { console.error(`bad --stage ${stageArg}`); process.exit(2) }
 
 for (const [flag, value] of Object.entries({ '--dir': dir, '--run-json': runJsonPath, '--jobs-json': jobsJsonPath, '--lock': lockPath, '--negative-tests': negPath, '--artifacts-json': artifactsJsonPath, '--repo-json': repoJsonPath2, '--preconditions': prePath, '--out': outPath })) {
   if (!value) { console.error(`missing ${flag}`); process.exit(2) }
@@ -96,7 +100,7 @@ const gateMap = {
   'P1': null, 'P2': null, 'P3': null,
   '0.1': ['0.1-dispatch-only', '0.1-confirm'],
   '0.2': ['0.2-ubuntu-latest', '0.2-bun-version'],
-  '0.3': ['0.3-transport-bun', '0.3-no-node-transport'],
+  '0.3': ['0.3-transport-bun', '0.3-transport-observed', '0.3-worker-spawn-recorded', '0.3-no-node-transport'],
   '0.4': ['0.4-egress'],
   '0.5': ['0.5-200-pong'],
   '0.6': ['0.6-billing-source'],
@@ -126,7 +130,7 @@ const retentionDays = Math.round((Date.parse(artifact.expires_at ?? '') - Date.p
 
 const record = {
   schemaVersion: 1,
-  stage: '0',
+  stage: String(stageArg),
   run: {
     id: run.id,
     url: run.html_url,
@@ -152,7 +156,11 @@ const record = {
     node: gates.runtime.node,
     transport: gates.runtime.transport,
     transportBasis: gates.runtime.transportDerived ? 'derived' : 'observed',
-    transportEvidence: `live 步骤 success；OUR_FREE_MODEL_FREE_TRANSPORT=${gates.runtime.transportEnv === '' ? '(unset)' : gates.runtime.transportEnv}；bun=${gates.runtime.bunPath}；bunVersion=${gates.runtime.bunVersion}；postCount=${gates.postCount}`,
+    // Stage >= 4 must carry the observation itself, not just call it observed:
+    // implementation / pid / version / source, written by the code that sent and
+    // read back from the capture by tools/gates.mjs.
+    transportObserved: gates.runtime.transportObserved ?? null,
+    transportEvidence: `live 步骤 success；OUR_FREE_MODEL_FREE_TRANSPORT=${gates.runtime.transportEnv === '' ? '(unset)' : gates.runtime.transportEnv}；bun=${gates.runtime.bunPath}；bunVersion=${gates.runtime.bunVersion}；postCount=${gates.postCount}${gates.runtime.transportObserved ? `；观测：${gates.runtime.transportObserved.implementation} pid=${gates.runtime.transportObserved.pid} version=${gates.runtime.transportObserved.version}` : ''}`,
     transportOverride: gates.runtime.transportEnv !== '',
     os: gates.runtime.platform,
   },
