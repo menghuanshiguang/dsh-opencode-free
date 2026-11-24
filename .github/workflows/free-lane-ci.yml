@@ -100,7 +100,10 @@ jobs:
           cd upstream
           for suite in fingerprint-test opencode-parity-test free-lane-wire-test free-lane-compat-test free-lane-quota-test; do
             echo "=== $suite ==="
-            node --import "$GITHUB_WORKSPACE/tools/guard-offline.mjs" "scripts/$suite.mjs"
+            # The guard states its verdict on stderr, so the artifact has to hold
+            # both streams: a count taken from stdout alone would find no guard
+            # lines and could not tell "zero requests" from "no guard at all".
+            node --import "$GITHUB_WORKSPACE/tools/guard-offline.mjs" "scripts/$suite.mjs" 2>&1
           done | tee "$GITHUB_WORKSPACE/suites.txt"
 
       - name: count the off-loopback attempts (zero, and show the detector was on)
