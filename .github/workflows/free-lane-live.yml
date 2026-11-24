@@ -16,6 +16,11 @@ on:
         required: true
         default: 'false'
         type: string
+      dry_run:
+        description: 'true = stop before the request and rehearse the reporting path (spends nothing)'
+        required: false
+        default: 'false'
+        type: string
 
 permissions:
   contents: read
@@ -78,10 +83,11 @@ jobs:
             echo "::error::refused — another live run is already queued or running"
             exit 1
           fi
-          if [ "$recent" -gt 0 ]; then
+          if [ "$recent" -gt 0 ] && [ '${{ inputs.dry_run }}' != 'true' ]; then
             echo "::error::refused — a live run completed less than 15 minutes ago (single-shot discipline)"
             exit 1
           fi
+          [ '${{ inputs.dry_run }}' = 'true' ] && echo "preflight: dry run — cooldown not applied (no request will be sent)" || true
           echo "preflight: no other live run in flight"
 
       - name: egress (recorded before any request)
@@ -143,6 +149,7 @@ jobs:
 
       - name: live request (one model, one request, no retry)
         id: live
+        if: inputs.dry_run != 'true' 
         env:
           OFM_WIRE_DIR: ${{ runner.temp }}/wire
         run: |
@@ -169,6 +176,28 @@ jobs:
             --wire "$RUNNER_TEMP/wire" \
             --out "$RUNNER_TEMP/gates.json" | tee "$RUNNER_TEMP/gates.txt"
 
+      - name: rehearsal — the reporting path runs and fails only where designed
+        if: inputs.dry_run == 'true'
+        env:
+          OFM_WIRE_DIR: ${{ runner.temp }}/wire
+        run: |
+          set -uo pipefail
+          echo "dry run: no live request is sent; the reporters run against an empty capture"
+          node tools/report-wire.mjs --dir "$RUNNER_TEMP/wire" --expect "$RUNNER_TEMP/fields.json" > "$RUNNER_TEMP/rehearsal-report.txt" 2>&1
+          rc_report=$?
+          cat "$RUNNER_TEMP/rehearsal-report.txt"
+          test "$rc_report" -eq 1 || { echo "::error::report-wire should refuse an empty capture with exit 1, got $rc_report"; exit 1; }
+          grep -q 'no wire capture' "$RUNNER_TEMP/rehearsal-report.txt" || { echo "::error::report-wire did not name the missing capture"; exit 1; }
+
+          node tools/gates.mjs --fields "$RUNNER_TEMP/fields.json" --live "$RUNNER_TEMP/live.json" \
+            --egress "$RUNNER_TEMP/egress.env" --wire "$RUNNER_TEMP/wire" --out "$RUNNER_TEMP/gates.json" > "$RUNNER_TEMP/rehearsal-gates.txt" 2>&1
+          rc_gates=$?
+          cat "$RUNNER_TEMP/rehearsal-gates.txt"
+          test "$rc_gates" -eq 1 || { echo "::error::gates must fail a zero-request run with exit 1, got $rc_gates"; exit 1; }
+          grep -q '"postCount": 0' "$RUNNER_TEMP/gates.json" || { echo "::error::gates.json does not record postCount 0"; exit 1; }
+          grep -q '0.3-transport-bun' "$RUNNER_TEMP/rehearsal-gates.txt" || { echo "::error::0.3 did not fail on a zero-request run"; exit 1; }
+          echo "rehearsal: both reporters ran; the only failures are the ones a zero-request run must produce"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -180,6 +209,7 @@ jobs:
             ${{ runner.temp }}/wire-report.txt
             ${{ runner.temp }}/gates.json
             ${{ runner.temp }}/gates.txt
+            ${{ runner.temp }}/rehearsal-*.txt
             ${{ runner.temp }}/egress.env
             ${{ runner.temp }}/wire/**
             bun-version.txt
