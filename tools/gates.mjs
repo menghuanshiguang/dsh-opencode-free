@@ -39,7 +39,11 @@ check('0.1-dispatch-only', process.env.GITHUB_EVENT_NAME === 'workflow_dispatch'
 check('0.1-confirm', process.env.GATES_CONFIRM === 'true', process.env.GATES_CONFIRM)
 check('0.2-ubuntu-latest', String(process.env.RUNNER_OS ?? '').toLowerCase() === 'linux' && (process.env.RUNNER_NAME ?? '').length > 0, process.env.RUNNER_OS)
 check('0.2-bun-version', (process.env.GATES_BUN_VERSION ?? '').length > 0, process.env.GATES_BUN_VERSION)
-check('0.3-transport-bun', fields?.transport?.resolved === 'bun', fields?.transport?.resolved)
+// `transport` is resolved from the lane's own Bun discovery, not observed on the
+// wire; 0.2's bunVersion is what turns "should be Bun" into evidence, so 0.3
+// requires both a non-empty version and the resolved value.
+check('0.3-transport-bun', fields?.transport?.resolved === 'bun' && (process.env.GATES_BUN_VERSION ?? '').length > 0,
+  `${fields?.transport?.resolved ?? '?'} / bunVersion=${process.env.GATES_BUN_VERSION ?? '(empty)'}`)
 check('0.3-no-node-transport', (process.env.OUR_FREE_MODEL_FREE_TRANSPORT ?? '') === '', process.env.OUR_FREE_MODEL_FREE_TRANSPORT ?? '(unset)')
 check('0.4-egress', Boolean(egress.egressIp) && Boolean(egress.country), `${egress.egressIp ?? '?'} / ${egress.country ?? '?'}`)
 check('0.5-200-pong', live?.ok === true && live?.status === 200 && String(live?.reply ?? '').trim() === 'PONG', live?.status)
@@ -72,6 +76,7 @@ const gates = {
     bunPath: process.env.OUR_FREE_MODEL_BUN ?? null,
     transportEnv: process.env.OUR_FREE_MODEL_FREE_TRANSPORT ?? '',
     transport: fields?.transport?.resolved ?? null,
+    transportDerived: true,
   },
   model: live?.model ?? fields?.model ?? null,
   modelsFreeCount: 1,

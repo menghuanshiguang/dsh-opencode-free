@@ -63,8 +63,17 @@ jobs:
           # A queued second dispatch only starts after the first finishes, so the
           # busy check alone cannot see it. A cooldown on completed runs is what
           # actually refuses it (and it also protects the upstream quota window).
-          recent=$(jq --arg id "$GITHUB_RUN_ID" --argjson now "$(date -u +%s)" '[.workflow_runs[] | select((.id|tostring) != $id) | select(.status == "completed") | select((.updated_at | fromdateiso8601) > ($now - 900))] | length' "$RUNNER_TEMP/runs.json")
-          echo "preflight: other_busy=$busy recent_completed=$recent (cooldown 900s)"
+          # A run that stopped before the live step spent nothing (the baseline
+          # publish is exactly that), so it must not start the cooldown.
+          recent=0
+          for rid in $(jq -r --arg id "$GITHUB_RUN_ID" --argjson now "$(date -u +%s)" '.workflow_runs[] | select((.id|tostring) != $id) | select(.status == "completed") | select((.updated_at|fromdateiso8601) > ($now - 900)) | .id' "$RUNNER_TEMP/runs.json"); do
+            live_step=$(curl -sS -H "Authorization: Bearer $GITHUB_TOKEN" -H 'Accept: application/vnd.github+json' \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$rid/jobs" \
+              | jq -r '[.jobs[].steps[] | select(.name | startswith("live request"))] | .[0].conclusion // "missing"')
+            echo "  recent run $rid live-step=$live_step"
+            if [ "$live_step" != "skipped" ] && [ "$live_step" != "missing" ]; then recent=$((recent + 1)); fi
+          done
+          echo "preflight: other_busy=$busy recent_spent=$recent (cooldown 900s)"
           if [ "$busy" -gt 0 ]; then
             echo "::error::refused — another live run is already queued or running"
             exit 1
@@ -133,6 +142,7 @@ jobs:
           exit "$status"
 
       - name: live request (one model, one request, no retry)
+        id: live
         env:
           OFM_WIRE_DIR: ${{ runner.temp }}/wire
         run: |
@@ -143,13 +153,13 @@ jobs:
             | tee "$RUNNER_TEMP/live.json"
 
       - name: report the wire capture
-        if: always()
+        if: always() && steps.live.outcome != 'skipped' 
         run: |
           set -uo pipefail
           node tools/report-wire.mjs --dir "$RUNNER_TEMP/wire" --expect "$RUNNER_TEMP/fields.json" | tee "$RUNNER_TEMP/wire-report.txt"
 
       - name: gates.json
-        if: always()
+        if: always() && steps.live.outcome != 'skipped' 
         run: |
           set -uo pipefail
           node tools/gates.mjs \

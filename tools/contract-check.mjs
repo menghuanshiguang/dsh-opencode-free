@@ -118,6 +118,19 @@ check(/<env>[\s\S]*?<\/env>/.test(prompt), 'environment block present')
 const envBlock = prompt.match(/<env>([\s\S]*?)<\/env>/)?.[1]?.replace(/\s+/g, ' ').trim() ?? ''
 console.log(`     env block: ${envBlock}`)
 
+// The `websearch` description carries a year the upstream client interpolates at
+// request time; the asset pins the year of the tag. Today they agree; from
+// 2027-01-01 they will not. This is a notice, not a gate: the free tier validates
+// `read` and `shell`, so the drift is inert until proven otherwise — but it must
+// never pass silently.
+const yearInAsset = /The current year is (\d{4})\./.exec(tools.find(tool => tool?.function?.name === 'websearch')?.function?.description ?? '')?.[1]
+const currentYear = String(new Date().getFullYear())
+if (yearInAsset !== undefined && yearInAsset !== currentYear) {
+  console.log(`\nWARN websearch year: asset ${yearInAsset}, current ${currentYear} — the official client renders the run-time year, so this body no longer matches; decide fix vs gate before the next live dispatch`)
+} else {
+  console.log(`\n     websearch year: ${yearInAsset ?? '(none)'} (matches the run-time year)`)
+}
+
 console.log(`\n=== client identity ===`)
 console.log(`     user-agent: ${CLIENT_UA}`)
 check(V2_CLIENT_VERSION === '2.2.3', 'client version is the pinned one', V2_CLIENT_VERSION)
