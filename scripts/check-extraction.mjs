@@ -279,6 +279,14 @@ else {
   console.log(`import set:      ${importedPaths.size} files (blob-verified), ${excludedPaths.size} excluded, upstream ${upstreamFiles ?? '?'}`)
   console.log(`entry:           ${entry} exports ${entryExports.length} symbol(s): ${entryExports.join(', ')}`)
   console.log(`reachability:    ${reached.size} files reached from the entry and the check scripts`)
+  // The artifact the gate wants: every shipped path with the whitelist's verdict
+  // on it, one line each, so the comparison is reviewable rather than asserted.
+  console.log('tree vs whitelist:')
+  for (const file of shipped) {
+    const path = rel(file)
+    const verdict = path === entry ? 'entry' : modules.has(path) ? 'whitelisted-module' : 'tool'
+    console.log(`  ${verdict.padEnd(20)} ${path}`)
+  }
   for (const h of hits) console.log(`HIT  ${h.family.padEnd(20)} ${h.path} — ${h.detail}`)
   for (const f of fail) console.log(`FAIL ${f}`)
   if (note.length) for (const n of note) console.log(`note ${n}`)
