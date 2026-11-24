@@ -55,6 +55,8 @@ const TOKEN_SHAPES = /ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|gho_[A-Za
 const BARE_PREFIX = /(?:ghp_|github_pat_|gho_|ghs_|ghu_|sk-)/g
 
 function classify(line, matchText) {
+  // 文档/注释里列举前缀：必零档已经保证没有真形态，这里只作参考档归类
+  if (/^\s*(?:\/\/|#|\*|--)/.test(line)) return 'doc-reference'
   // 合成样例：源码里拼出来的假值，例如 'ghp_' + 'A'.repeat(36) 或 ${'A'.repeat(36)}
   const at = line.indexOf(matchText)
   const after = line.slice(at + matchText.length, at + matchText.length + 3)
@@ -75,7 +77,8 @@ function scanHistory(log) {
     if (hunk) { lineNo = Number(hunk[1]); continue }
     if (raw.startsWith('+') && !raw.startsWith('+++')) {
       for (const shape of raw.match(TOKEN_SHAPES) ?? []) findings.push({ kind: 'token-shape', file, line: lineNo, shape })
-      for (const bare of raw.match(BARE_PREFIX) ?? []) findings.push({ kind: 'bare-prefix', file, line: lineNo, bare, class: classify(raw, bare) })
+      const added = raw.slice(1) // 去掉 diff 的前导 '+'，注释行才认得出
+      for (const bare of added.match(BARE_PREFIX) ?? []) findings.push({ kind: 'bare-prefix', file, line: lineNo, bare, class: classify(added, bare) })
       lineNo++
     } else if (!raw.startsWith('-')) {
       lineNo++
@@ -90,7 +93,8 @@ if (gitLogPath) {
   const tokenShapes = findings.filter(f => f.kind === 'token-shape')
   const creds = log.match(/https:\/\/[^/\s]+:[^@\s]+@/g) ?? []
   const bare = findings.filter(f => f.kind === 'bare-prefix')
-  const unclassified = bare.filter(f => f.class !== 'scanner-source' && f.class !== 'synthetic-sample')
+  const ALLOWED_CLASSES = new Set(['scanner-source', 'synthetic-sample', 'doc-reference'])
+  const unclassified = bare.filter(f => !ALLOWED_CLASSES.has(f.class))
   const classified = bare.map(f => `${f.file}:${f.line} ${f.bare} ${f.class}`)
   const hardOk = tokenShapes.length === 0 && creds.length === 0 && unclassified.length === 0
   const detail = [
