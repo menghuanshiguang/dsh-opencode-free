@@ -1,0 +1,1 @@
+{"at": "2026-11-24T05:26:03.000Z", "kind": "spawn", "transport": "bun", "pid": 4242, "command": "/home/runner/.bun/bin/bun", "argv": ["/home/runner/.dsh/opencode-free/run/worker.mjs"], "observerPid": 4200}
