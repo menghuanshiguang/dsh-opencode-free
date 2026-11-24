@@ -278,6 +278,23 @@ if (Array.isArray(artifacts)) {
   check('artifacts', artifacts.some(a => a?.kind === 'log'), '至少一个 kind=log（原始日志）')
 }
 
+// 「这份档案绑的是哪一件」——阶段 4 起必须能回答（2026-11-24 封存档案绑错对象的洞）。
+// 上一版只查 artifacts[0] 的字段齐备：封存那份绑的是 archive-<runid>（run 自己那个 zip），
+// 字段一个不缺，rc 还是 0。判据落在两件能各自独立复核的事上：
+//   1) 名字必须逐字等于 live-<run.id>：同一条 run 的 zip 都叫 archive-<runid>，只认 live 那一件；
+//   2) 必须有 id：没有 id 就说明它是按列表顺序挑出来的（挑哪一件都是猜），不是按上传那步
+//      报出的 id 取的。id 与 upload 上报值的一致性由 gates/from-artifact.mjs 在生产那一步硬判
+//      （单件响应的 id ≠ --artifact-id 直接拒），这里判的是「档案自己有没有把 id 钉下来」。
+// 阶段 0 不追写：那两份历史档案没有 id 字段，改判据不许倒回去改已归档的记录。
+if (Number(stage) >= 4 && Array.isArray(artifacts)) {
+  const named = artifacts[0] ?? {}
+  check('artifacts[0].id', int(named.id, 1), '阶段 4 起必须写 artifact 的 id（正整数）：没有 id 的档案是按列表顺序挑出来的，绑在哪一件上都不可核')
+  if (int(run.id, 1)) {
+    check('artifacts[0].name', named.name === `live-${run.id}`,
+      `必须逐字等于 live-${run.id}（实际 ${JSON.stringify(named.name)}）：档案绑的必须是这一条 run 的 live 产物，不是它的封存 zip，也不是列表里的第 0 个`)
+  }
+}
+
 // ---- verdict ----
 const verdict = doc.verdict ?? {}
 check('verdict', isObject(doc.verdict), '缺失')

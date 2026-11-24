@@ -82,9 +82,19 @@ if (artifactId !== undefined) {
   if (!fs.existsSync(artifactJsonPath)) fail(`--artifact-json 指的文件不存在：${artifactJsonPath}`)
   artifact = readJson(artifactJsonPath)
 } else {
+  // 按名字选件，不按顺序挑。旧写法是 `name.includes(run.id) ?? 列表[0]`：同一条 run 的
+  // 两个 artifact 都叫 *-<runid>，`includes` 两个都命中，于是取了列表第 0 个——
+  // 2026-11-24 那份封存档案就是这么绑到 archive-<runid> 上的（内容是 live 的，名字是封存的），
+  // 而校验器只查字段齐备，rc 仍是 0。契约收紧成：只认逐字等于 live-<runid> 的那一件，
+  // 唯一命中才用，零命中或多命中都拒——两种情况下选哪一件都是猜。
   const artifactList = readJson(artifactsJsonPath).artifacts ?? []
-  artifact = artifactList.find(a => a.name.includes(String(run.id))) ?? artifactList[0]
-  if (!artifact) fail('没有 artifact')
+  const wanted = `live-${run.id}`
+  const matches = artifactList.filter(a => String(a.name ?? '') === wanted)
+  if (matches.length === 0) {
+    fail(`artifacts 列表里没有正好叫 ${wanted} 的那一件（列表：${artifactList.map(a => a.name).join(' | ') || '空'}）——按名字选件，不按顺序挑第 0 个`)
+  }
+  if (matches.length > 1) fail(`artifacts 列表里有 ${matches.length} 件都叫 ${wanted}：命名撞了，挑哪一件都是猜`)
+  artifact = matches[0]
 }
 const jobs = readJson(jobsJsonPath).jobs ?? []
 const live = readJson(path.join(dir, 'live.json'))
