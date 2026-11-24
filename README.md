@@ -90,10 +90,37 @@ The 900 seconds is a floor, not the working rule: two live runs are kept at
 least an hour apart, and "the workflow would have allowed it" has never been a
 reason to dispatch one.
 
+**The year inside the `websearch` description is rendered per request**, the way
+the official client renders it. With the clock in the asset's own year (2026) the
+product reproduces the asset byte for byte; in any other year it renders that
+year, because that is what the released client sends. The consequence is worth
+stating before someone rediscovers it the hard way: `toolsSha256` in
+`docs/fingerprint-baseline.json` is comparable as a lock **only inside that
+year**. In 2027 a live run's `toolsSha256` will differ from the lock and gate 0.8
+will say so, while not one byte of the fingerprint has moved — the calendar did.
+`acceptance/year-clock-test.mjs --clock <year>` is the gate for that behaviour
+and is run with a clock, never with today's date alone.
+
 **Derived code travels with its notice.** This package is MIT, derived from
 `Ebony-Vinyl/dsh-our-free-model` at `f29116ba`; `LICENSE` carries the upstream
 text and its third-party notices, and it ships with the package (`files` in
 `package.json`) rather than living only in the repository.
+
+**The year is rendered when the request is built, as the official client
+renders it.** The `websearch` tool description carries `The current year is
+<year>.`; the shipped body substitutes the year of the moment the request is
+assembled (`src/o2a.js`) rather than freezing the one in the assets. So
+`docs/fingerprint-baseline.json` holds the `toolsSha256` of the assets' own year
+(2026): in that year the shipped body reproduces the assets byte for byte, in
+any later year it renders that year exactly as the official template renders it,
+and the recorded lock value is only comparable within the assets' year. A live
+run in 2027 whose `toolsSha256` differs from the lock has therefore not broken
+the fingerprint — the calendar moved, which is a different failure from a body
+that no longer matches the official client. `node
+acceptance/year-clock-test.mjs --clock <year>` is the dead gate on that
+behaviour: `--clock 2027-01-01` must exit 0, and it fails both when the
+description freezes at the assets' year again and when the render stops
+equalling the official template's render for the injected clock.
 
 ## Evidence has to be able to go red
 
