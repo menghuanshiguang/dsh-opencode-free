@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "repo": "sst/opencode",
+  "tag": "v2.2.3",
+  "source": "anonymous https://raw.githubusercontent.com/sst/opencode/v2.2.3/<path> (no token, no gh CLI)",
+  "blobShaAlgorithm": "sha1(\"blob <size>\\0\" + bytes) — the git object id",
+  "files": {
+    "packages/core/src/session/runner/prompt/system.txt": {
+      "blobSha": "0e02ced78d7aa90f23b5dbb2c7146dfa0d0bb409",
+      "sha256": "ab9749036fe5a6b96c74c302900f67a9b249589b4fc4b8a8d18f3c6879dc506d",
+      "bytes": 756
+    },
+    "packages/core/src/session/system-prompt.ts": {
+      "blobSha": "ea83625ed8244b9d0778b4fa2d4ca81e21a58aa7",
+      "sha256": "88f088f1bfa0b5e7dabfb6d3083c19d4203f7e12cc00a251494264a5b243f1dd",
+      "bytes": 1332
+    },
+    "packages/core/src/tool/plugin/read.ts": {
+      "blobSha": "4c541ccda3f8cc0549d1c457a2d3899added4c50",
+      "sha256": "7e0f39085a875a19d4ad7691065314aac83f76efdcfa0ecb1590bf90741767d8",
+      "bytes": 9943
+    },
+    "packages/core/src/tool/plugin/shell.ts": {
+      "blobSha": "c876ed2af334e5c9d314681fe0446dc768efae35",
+      "sha256": "cab416efd2758e2e8377330961eb3fef4aad293a860703207483738a7473c3cc",
+      "bytes": 12592
+    },
+    "packages/core/src/tool/plugin/edit.ts": {
+      "blobSha": "5165e7a5547b94c638d847da9d16f5066bb481b1",
+      "sha256": "a88385f5018613eff64de6824a41bad46bc41e641d8ce835efc8fdc59306ed58",
+      "bytes": 15197
+    },
+    "packages/core/src/tool/plugin/glob.ts": {
+      "blobSha": "40bcc7f91c51e9e2e52abdbfa9a3495531af01e1",
+      "sha256": "1282e72cdcb5e8e1b528292a5d80643796c94ff90b3dc92bd938d657395b4ef7",
+      "bytes": 5915
+    },
+    "packages/core/src/tool/plugin/grep.ts": {
+      "blobSha": "0062e33b82899e849cdffeb275358c21f79bb0ad",
+      "sha256": "2a8971ff65f03d46a252645e1fbc439dd91267afa2b517fff9f1a83976eec860",
+      "bytes": 7208
+    },
+    "packages/core/src/tool/plugin/write.ts": {
+      "blobSha": "147941ab9ffbb818665612683d397a7a22399916",
+      "sha256": "c554c1863a90a97cc63954f5c45320ab54b4a0db588df22946a361b26b7ff0d9",
+      "bytes": 4437
+    },
+    "packages/core/src/tool/plugin/patch.ts": {
+      "blobSha": "554e7a9d3eb161011d11641a201677a4e93952e4",
+      "sha256": "fe8c56d3bfda087c1d720f3babe2b6db9cec40c3c7c55f520de0ffdc608dcf54",
+      "bytes": 16373
+    },
+    "packages/core/src/tool/plugin/webfetch.ts": {
+      "blobSha": "3c9cf10926c490fdae7ff162f661dea461a786d9",
+      "sha256": "475bc8599044327ed857e04f8e12e3a9a787a020133ae47e7fe86c5ea6141860",
+      "bytes": 9051
+    },
+    "packages/core/src/tool/plugin/websearch.ts": {
+      "blobSha": "feb6393edf43075ee72c65e1bf79f8517bf33bd1",
+      "sha256": "d5fc034bb669a1c334524ee3a5ae16ff3fb6e4fcd2f3b583bcd3908d4bcf0120",
+      "bytes": 8912
+    },
+    "packages/core/src/tool/plugin/question.ts": {
+      "blobSha": "1cc20da4b0f272a2afd2c85e68ce8acbed69786d",
+      "sha256": "fb305e6a6e222a00a84ad87c20717f865048e8fde723efb22af94b27cd4ca945",
+      "bytes": 5351
+    },
+    "packages/core/src/tool/plugin/skill.ts": {
+      "blobSha": "25000de02d2571ca19b7891df1b04ec6f768e047",
+      "sha256": "854e90ac423e0a409ee6b3dba08711f3c451c8fec7f7a0c5873e7583d5b26d6e",
+      "bytes": 2587
+    },
+    "packages/core/src/tool/plugin/subagent.ts": {
+      "blobSha": "b3cc81f651506c24df89285dcd534fd773c57afc",
+      "sha256": "93589430676f924d57fa06c13cb29a70baef9beac4d85078f5523ddec9810832",
+      "bytes": 14780
+    },
+    "packages/core/src/tool/plugin/todo.ts": {
+      "blobSha": "b28509f7205e6bf679252c853e35bc9140fdddce",
+      "sha256": "770ab1b536a04b2399465642df56839f8e1c10c21af27f013036c5e6ae7938d8",
+      "bytes": 3184
+    },
+    "packages/core/src/tool/patch.txt": {
+      "blobSha": "72c0489c0d3cd31abd75df4785c5d4b1e483ff0a",
+      "sha256": "6decf236ce2c7399b02c222c3c081d034434d3eaa7f3b6dccda4ddef65182142",
+      "bytes": 1092
+    },
+    "packages/core/src/tool/todowrite.txt": {
+      "blobSha": "0e27a9232f1a30159381af53f1d07449bfd59779",
+      "sha256": "876a6c6dc59690f6ea7b760252cea0b7051c79846f02f94bd274127996d1d447",
+      "bytes": 512
+    },
+    "packages/core/src/tool/read-filesystem.ts": {
+      "blobSha": "e4b3b56eb8c9684be7108ad8a4face2156c0c988",
+      "sha256": "f81de523ae9d83d6caeb78a4a9faae4ecf80a55f753a8444e4e4f1346ba3bbd4",
+      "bytes": 13913
+    },
+    "packages/core/src/filesystem.ts": {
+      "blobSha": "ab421a7737a6748b18336c4729c121ea8bb476a1",
+      "sha256": "19a8d3df0691d572ed855ba08b3aba5c28e777040eb1b2e9b71b003fdfd23bad",
+      "bytes": 8479
+    },
+    "packages/core/src/schema.ts": {
+      "blobSha": "c58a4b381bd477587096c00800a0e5f96443816d",
+      "sha256": "f2eeeda62e8fff65d12d578c4257cbb198b912ffb3fa7ebdb26a3aa91210eb09",
+      "bytes": 1513
+    },
+    "packages/core/src/skill.ts": {
+      "blobSha": "e0d7981d15a300eaa2f8016a860085ce5e741617",
+      "sha256": "9d5c29f5cec09375f3a70bf107c50ea3b71842374c7f8827d26541d8be0f5584",
+      "bytes": 4264
+    },
+    "packages/schema/src/question.ts": {
+      "blobSha": "61dedfaa3700822c801d9ae3722aa3853ebf3896",
+      "sha256": "7b7606cd1ae8611438110a99c86cc12986deceb7384820ef007c0ec9879f6fd9",
+      "bytes": 971
+    },
+    "packages/core/src/shell/select.ts": {
+      "blobSha": "6645454c0a45d7afaff7b8d01b895808b453358a",
+      "sha256": "03427b391487a26cba5ca115bd294ebcbfecfdc98d03f5b9ea66ede151bda822",
+      "bytes": 7028
+    }
+  }
+}

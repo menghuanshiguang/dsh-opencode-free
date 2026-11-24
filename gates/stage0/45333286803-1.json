@@ -11,7 +11,7 @@
     "failedSteps": [
       {
         "name": "report the wire capture",
-        "reason": "run 45333286803 的 live 步骤为 success，200/PONG/billing=free/postCount=1 证据完整（artifact 14892409076，0.1–0.9 在原始 artifact 上 13/13 通过，toolsSha256=6fb3aed8…=锁值）。conclusion=failure 仅由报告步骤的旧 bug 造成，与请求无关。一次性豁免，不构成先例。"
+        "reason": "wire-report.txt 第 11 行：tool order equals the pinned asset order；wire-report.txt 第 17 行：shell: wire description and schema are the pinned asset；报告口径 bug（按资产键序比线上顺序、按未渲染模板比 shell），live 步骤与 artifact 不受影响"
       }
     ],
     "attempt": 1,
@@ -310,6 +310,6 @@
   ],
   "producedBy": {
     "bot": "总策划",
-    "at": "2026-11-24T05:36:40.508Z"
+    "at": "2026-11-24T05:26:20.419Z"
   }
 }

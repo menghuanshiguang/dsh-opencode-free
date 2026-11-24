@@ -34,6 +34,7 @@ const artifactsJsonPath = arg('--artifacts-json')
 const negPath = arg('--negative-tests')
 const prePath = arg('--preconditions')
 const waiverPath = arg('--waiver')
+const failedStepReason = arg('--failed-step-reason')
 const outPath = arg('--out')
 
 for (const [flag, value] of Object.entries({ '--dir': dir, '--run-json': runJsonPath, '--jobs-json': jobsJsonPath, '--lock': lockPath, '--negative-tests': negPath, '--artifacts-json': artifactsJsonPath, '--repo-json': repoJsonPath2, '--preconditions': prePath, '--out': outPath })) {
@@ -78,6 +79,16 @@ const liveStep = jobs.flatMap(j => j.steps ?? []).find(s => /live request/i.test
 if (!liveStep || liveStep.conclusion !== 'success') fail('live 步骤不是 success')
 const failedSteps = jobs.flatMap(j => j.steps ?? []).filter(s => s.conclusion === 'failure')
 if (failedSteps.length > 0 && !waiver) fail('run 有失败步骤，但没有 waiver')
+// 失败原因优先由 artifact 自己的 FAIL 行推出（可复现，不靠人传字符串）
+let derivedReason = null
+try {
+  const wireLines = fs.readFileSync(path.join(dir, 'wire-report.txt'), 'utf8').split('\n')
+  const fails = wireLines.map((line, i) => ({ line, no: i + 1 })).filter(x => x.line.startsWith('FAIL '))
+  // 固定注脚：说明这些 FAIL 属于报告口径，不涉及线上请求（同一份 artifact 每次生成同一串）
+  const FAILED_STEP_NOTE = '报告口径 bug（按资产键序比线上顺序、按未渲染模板比 shell），live 步骤与 artifact 不受影响'
+  if (fails.length) derivedReason = fails.map(f => `wire-report.txt 第 ${f.no} 行：${f.line.replace(/^FAIL /, '')}`).join('；') + `；${FAILED_STEP_NOTE}`
+} catch { /* 没有 wire-report.txt 就只认 --failed-step-reason */ }
+if (failedSteps.length > 0 && !failedStepReason && !derivedReason) fail('失败步骤必须能给出真实原因（artifact FAIL 行或 --failed-step-reason）')
 
 // 记录里的门：用 artifact 的 checks，缺一条即拒
 const checks = gates.checks ?? {}
@@ -123,7 +134,7 @@ const record = {
     event: run.event,
     conclusion: run.conclusion,
     liveStepOutcome: liveStep.conclusion,
-    failedSteps: failedSteps.map(s => ({ name: s.name, reason: waiver?.reason ?? '未说明' })),
+    failedSteps: failedSteps.map(s => ({ name: s.name, reason: failedStepReason ?? derivedReason ?? '未说明' })),
     attempt: run.run_attempt,
     createdAt: run.created_at,
     headSha: run.head_sha,
@@ -189,7 +200,8 @@ const record = {
   }],
   verdict: { pass: true, failed: [] },
   negativeTests: neg.negativeTests,
-  producedBy: { bot: '总策划', at: new Date().toISOString() },
+  // 用 artifact 自己的 generatedAt：同一份输入必须生成逐字节相同的档案（验收员要能复现）
+  producedBy: { bot: '总策划', at: gates.generatedAt },
 }
 if (waiver) record.verdict.waiver = waiver
 
