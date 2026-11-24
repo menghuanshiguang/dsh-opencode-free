@@ -68,7 +68,7 @@ function classify(line, matchText) {
   }
   if (after.startsWith('${') || /\.repeat\(/.test(line) || /'[A-Z]'\s*\+/.test(line)) return 'synthetic-sample'
   // 扫描器自身：正则字面量或 grep 表达式
-  if (/log\.match\(|grep\s+-|new RegExp|[A-Za-z_]\s*=\s*\/[^/]*ghp_/.test(line)) return 'scanner-source'
+  if (/log\.match\(|grep\s+-|new RegExp|[A-Za-z_]\s*=\s*\/[^/]*ghp_|matchText ===|BARE_PREFIX|TOKEN_SHAPES/.test(line)) return 'scanner-source'
   return 'unclassified'
 }
 
