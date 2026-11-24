@@ -185,6 +185,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          # The new-line policy compares the import commit against this one, so
+          # the shallow single-commit clone would leave the base unreachable.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -195,6 +198,9 @@ jobs:
 
       - name: check-extraction (import set, excluded reach, exports, leftovers)
         run: node scripts/check-extraction.mjs | tee extraction.txt
+
+      - name: new-line policy (a carried-over file may not gain a line undeclared)
+        run: node gates/check-newline-policy.mjs | tee newline-policy.txt
 
       - name: npm test
         run: npm test
@@ -249,6 +255,7 @@ jobs:
           name: extraction
           path: |
             extraction.txt
+            newline-policy.txt
             year-clock-today.txt
             year-clock-2027.txt
           retention-days: 30

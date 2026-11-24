@@ -1,28 +1,59 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "stage": "2",
   "frozenAt": "2026-11-24",
   "frozenBy": "总策划",
+  "revision": "对齐 docs/adaptations.json（open-external.js 挪进移除集）与督查 2026-11-24 的「新增行三分类」裁定",
   "strategy": "kept-closure",
   "baseline": {
     "repo": "Ebony-Vinyl/dsh-our-free-model",
     "commit": "f29116baea55483ff067c1816966f1d08d8f0981",
     "files": 899
   },
-  "imported": {
-    "count": 7,
+  "baselineImport": {
+    "commit": "c18b2909da05ade6d1a13e2090c87ca9d7af1dee",
+    "files": 7,
     "bytes": 211307,
+    "entries": [
+      { "path": "src/bun-fetch.js", "blob": "afd13bfa85b60e5816df0bbbd6d2971e3c0f1b42", "bytes": 8958 },
+      { "path": "src/egress.js", "blob": "257fbcf219db4face6537fa7792b2a175bb33389", "bytes": 65793 },
+      { "path": "src/http.js", "blob": "dbe915eede1b8e8b49ebc07bd3f0d0cbda681f5a", "bytes": 34582 },
+      { "path": "src/o2a.js", "blob": "40457913e60ff620b1593c73e498b7a52f5c09ce", "bytes": 49383 },
+      { "path": "src/open-external.js", "blob": "95929b155c6932aeac4714032c4da40acc34c7ae", "bytes": 4234 },
+      { "path": "src/store.js", "blob": "e0c1cbdee34d20f87d1e7b768f6aaffadc5d7075", "bytes": 27185 },
+      { "path": "src/upstream.js", "blob": "1279b607672e80589024a3b69abfda889c4afab0", "bytes": 21172 }
+    ],
+    "note": "从 src/upstream.js 起的相对 import 闭包，导入那一刻 7 个文件逐 blob 与 f29116ba 相等。catalog.js 不是它的依赖（曾误算为 8）。抽取发生在这之后，7 个文件各自的状态见 shipped。"
+  },
+  "shipped": {
+    "verbatim": ["src/bun-fetch.js", "src/http.js", "src/o2a.js", "src/upstream.js"],
+    "adapted": ["src/egress.js", "src/store.js"],
+    "removed": ["src/open-external.js"],
+    "added": ["src/gateway.js"],
+    "note": "4 个逐字节未动 + 2 个按 docs/adaptations.json 申报改写 + 1 个申报删除 = 导入时的 7 个；再加一个自有入口 src/gateway.js，src/ 下共 7 个模块。改写与删除的理由只在 docs/adaptations.json 一处，本文件不复述，避免两处漂移。"
+  },
+  "imported": {
+    "count": 6,
+    "bytes": 207073,
     "files": [
       "src/bun-fetch.js",
       "src/egress.js",
       "src/http.js",
       "src/o2a.js",
-      "src/open-external.js",
       "src/store.js",
       "src/upstream.js"
     ],
-    "note": "从 src/upstream.js 起的相对 import 闭包，7 个文件；catalog.js 不是它的依赖（曾误算为 8）。"
+    "note": "src/ 下现存、可被 import 的模块清单（check-extraction 用它判「清单外的模块」）。导入时的 7 个见 baselineImport；src/open-external.js 已删除并列入 shipped.removed，src/gateway.js 由 publicExports.entry 单独给出，因此不在此列。"
   },
+  "removed": [
+    {
+      "path": "src/open-external.js",
+      "action": "removed",
+      "declaredIn": "docs/adaptations.json#/removed",
+      "reason": "restrictPermissions 只服务于已删的设置与密钥环，抽取后保留闭包里没有任何模块 import 它，文件整体删除；导入时它是 7/7 blob 相等之一，删除属于抽取后的独立改动。",
+      "mustNotReappear": true
+    }
+  ],
   "exclusionsIndex": "docs/baseline-exclusions.json",
   "publicExports": {
     "entry": "src/gateway.js",
@@ -40,11 +71,20 @@
     ]
   },
   "criteria": [
-    "imported ⊆ upstream，逐文件 blob sha 与字节数相等（899 → 7 + 892 = 899，两集不相交）",
+    "imported ⊆ upstream：baselineImport 的 7 个文件逐 blob 与字节数等于 f29116ba；排除集 892 条逐条声明，7 + 892 = 899，两集不相交",
+    "抽取后三态齐备：verbatim 的 4 个逐字节未动、adapted 的 2 个在 docs/adaptations.json 有 baselineBlob 与理由且字节确实变了、removed 的 1 个不在工作树里（check-extraction 逐条机判）",
     "imported 内 src/accounts/providers/、eac*、worker 管理页/统计路由零命中",
     "exclusions 里任何文件被 imported 代码 import 到即 FAIL（verify-closure）",
-    "src/gateway.js 导出恰好 {startGateway, createGateway}，package.json exports 只有 \".\""
+    "src/gateway.js 导出恰好 {startGateway, createGateway}，package.json exports 只有 \".\"",
+    "新增行只许出现在三类路径：工具路径（scripts/ docs/ .github/ gates/ acceptance/ tools/）、docs/adaptations.json 申报过的改写文件、基线提交里不存在的自有模块（现为 src/gateway.js）；其余路径出现新增行即 FAIL（gates/check-newline-policy.mjs）"
   ],
+  "newLinePolicy": {
+    "rule": "剥离是删，不是改；保住的上游代码不带新增行，除了申报过的改写与自有新模块。",
+    "script": "gates/check-newline-policy.mjs",
+    "base": "baselineImport.commit",
+    "command": "node gates/check-newline-policy.mjs",
+    "note": "工具路径自身怎么长不受限（闸门与测试就该长），受管的是从基线提交带过来的代码：它们要长行必须先在 docs/adaptations.json 有带理由的申报，否则 FAIL。"
+  },
   "pluginForm": "removed",
   "productInternalModules": {
     "files": [
@@ -56,17 +96,10 @@
       "src/store.js",
       "src/gateway.js"
     ],
-    "note": "抽取后的产品内部模块：6 个上游文件 + 新网关入口 src/gateway.js。src/open-external.js 在抽取中删除（其 restrictPermissions 职责内联），所以不再出现。"
+    "note": "抽取后的产品内部模块：6 个上游文件（4 未动 + 2 改写）+ 新网关入口 src/gateway.js。src/open-external.js 见 shipped.removed。"
   },
-  "afterImportChanges": [
-    {
-      "path": "src/open-external.js",
-      "action": "removed",
-      "reason": "restrictPermissions 内联进使用点，文件整体删除；不属于 baseline 导入集的破坏（导入时 7/7 blob 相等，抽取是后续独立改动）"
-    }
-  ],
   "driftCheck": {
-    "command": "node -e \"…相对 import 解析…\"",
-    "result": "6+1 文件、0 missing、0 excluded import"
+    "command": "node scripts/check-extraction.mjs && node gates/check-newline-policy.mjs",
+    "result": "两个脚本都必须 exit 0；check-extraction 报 EXTRACTION: PASS，check-newline-policy 报 NEWLINE POLICY: PASS"
   }
 }
