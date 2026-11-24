@@ -36,11 +36,12 @@ die() {
 }
 
 product=gates.flat.json
-dir= out= runjson= jobsjson= artifactsjson= repojson=
+dir= out= runjson= jobsjson= artifactsjson= repojson= artifactid= artifactdigest= artifactjson=
+artifactid_seen=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --dir | --out | --run-json | --jobs-json | --artifacts-json | --repo-json | --product)
+    --dir | --out | --run-json | --jobs-json | --artifacts-json | --repo-json | --product | --artifact-id | --artifact-digest | --artifact-json)
       [ $# -ge 2 ] || die 2 "缺少 $1 的值"
       key=${1#--}
       value=$2
@@ -53,6 +54,9 @@ while [ $# -gt 0 ]; do
         artifacts-json) artifactsjson=$value ;;
         repo-json) repojson=$value ;;
         product) product=$value ;;
+        artifact-id) artifactid=$value; artifactid_seen=1 ;;
+        artifact-digest) artifactdigest=$value ;;
+        artifact-json) artifactjson=$value ;;
       esac
       ;;
     *)
@@ -62,9 +66,21 @@ while [ $# -gt 0 ]; do
 done
 
 for pair in "--dir:$dir" "--out:$out" "--run-json:$runjson" "--jobs-json:$jobsjson" \
-  "--artifacts-json:$artifactsjson" "--repo-json:$repojson"; do
+  "--repo-json:$repojson"; do
   [ -n "${pair#*:}" ] || die 2 "缺少 ${pair%%:*}"
 done
+
+# 归档哪一个 artifact：三种给法，互不兜底。
+#   --artifact-json   直接给单件响应（夹具、人工复盘）
+#   --artifact-id     按 id 取单件响应（live 走这条；id 与 digest 来自 upload-artifact 的 outputs）
+#   --artifacts-json  列表（旧路径；给了 id 时一个字都不看）
+if [ "$artifactid_seen" -eq 1 ] && [ -z "$artifactid" ]; then
+  # 上传失败时 upload-artifact 的 artifact-id 是空串。那是「没给 id」，不是「id 查不到」。
+  die 2 "upload-artifact 没给 artifact-id（空值，上传失败？）：这是「没给 id」，不是「id 查不到」"
+fi
+if [ -z "$artifactid" ] && [ -z "$artifactjson" ] && [ -z "$artifactsjson" ]; then
+  die 2 "缺少 --artifact-id（live）或 --artifact-json / --artifacts-json（夹具）"
+fi
 
 # 浅历史先判，先于任何一步：深度 1 的克隆里 `git log -p --all` 只看得见一个提交，
 # P3 会在这种历史上报 PASS，那比跳过更坏（督查 2026-11-24）。
@@ -81,9 +97,13 @@ for required in live.json "$product" fields.json egress.env; do
 done
 [ ${#missing[@]} -eq 0 ] || die 2 "产物目录 $dir 缺 ${missing[*]}——没有东西可归档"
 
-for sidecar in "$runjson" "$jobsjson" "$artifactsjson" "$repojson"; do
+for sidecar in "$runjson" "$jobsjson" "$repojson"; do
   [ -f "$sidecar" ] || die 2 "找不到 $sidecar"
 done
+# artifacts 列表只在没有 id 时才用；给了 id 时它可以是空的，那不是缺输入。
+if [ -z "$artifactid" ] && [ -z "$artifactjson" ] && [ ! -f "$artifactsjson" ]; then
+  die 2 "找不到 $artifactsjson"
+fi
 [ -f docs/fingerprint-baseline.json ] || die 2 "docs/fingerprint-baseline.json 不存在，锁比对无从做"
 
 outdir=$(dirname -- "$out")
@@ -91,6 +111,28 @@ mkdir -p "$outdir" || die 2 "建不出 $outdir"
 
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/archive-live.XXXXXX") || die 2 "mktemp 失败"
 trap 'rm -rf "$tmp"' EXIT
+
+# ---- 按 id 取单件响应：不读列表，就没有「列表还没索引到」这回事 ----
+# 一次有界重试（两次尝试），失败时把 id 与 HTTP 状态码原样打出来；绝不退化成一句「没有 artifact」。
+if [ -n "$artifactid" ] && [ -z "$artifactjson" ]; then
+  if [ -z "${GITHUB_TOKEN:-}" ] || [ -z "${GITHUB_REPOSITORY:-}" ] || [ -z "${GITHUB_API_URL:-}" ]; then
+    die 2 "给了 --artifact-id $artifactid，但缺 GITHUB_TOKEN / GITHUB_REPOSITORY / GITHUB_API_URL，取不到这一件的响应"
+  fi
+  artifactjson=$tmp/artifact.json
+  status=000
+  for attempt in 1 2; do
+    status=$(curl -sS -m 20 -o "$artifactjson" -w '%{http_code}' \
+      -H "Authorization: Bearer $GITHUB_TOKEN" -H 'Accept: application/vnd.github+json' \
+      "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifactid") || status=000
+    [ "$status" = "200" ] && break
+    echo "artifact id=$artifactid: 第 $attempt 次取件返回 HTTP $status，2 秒后重试" >&2
+    sleep 2
+  done
+  if [ "$status" != "200" ]; then
+    die 1 "取不到 artifact id=$artifactid：HTTP $status（GET $GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifactid）$(head -c 300 "$artifactjson" 2>/dev/null | tr '\n' ' ')"
+  fi
+  echo "artifact: id=$artifactid 取件 HTTP 200（按 id 取，未读列表）"
+fi
 
 # ---- P1–P3：三个输入都由脚本自己取，调用方只给 repo.json ----
 git show HEAD:LICENSE > "$tmp/LICENSE" 2>"$tmp/license.err" ||
@@ -133,6 +175,16 @@ else
   echo "contracts: 不在检出里（$contracts），档案的 contractsSha256 退回锁文件"
 fi
 
+artifactargs=()
+if [ -n "$artifactid" ]; then
+  artifactargs+=(--artifact-id "$artifactid" --artifact-json "$artifactjson")
+  [ -n "$artifactdigest" ] && artifactargs+=(--artifact-digest "$artifactdigest")
+elif [ -n "$artifactjson" ]; then
+  artifactargs+=(--artifact-json "$artifactjson")
+else
+  artifactargs+=(--artifacts-json "$artifactsjson")
+fi
+
 node gates/from-artifact.mjs \
   --dir "$dir" \
   --run-json "$runjson" \
@@ -143,7 +195,7 @@ node gates/from-artifact.mjs \
   --preconditions "$preconditions" \
   --negative-tests "$negative" \
   --stage 4 \
-  --out "$out" "${extra[@]}" || die 1 "from-artifact 拒绝产出档案（上面是它给的原因）"
+  --out "$out" "${artifactargs[@]}" "${extra[@]}" || die 1 "from-artifact 拒绝产出档案（上面是它给的原因）"
 
 # --lock 不是可选项：不带它时锁比对那一段整段不跑，指纹闭环等于没判（督查 条件七）。
 node gates/validate.mjs "$out" --stage 4 --lock docs/fingerprint-baseline.json ||

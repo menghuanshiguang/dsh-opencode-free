@@ -247,6 +247,7 @@ jobs:
           ' "$product"
 
       - uses: actions/upload-artifact@v4
+        id: live_upload
         if: always()
         with:
           name: live-${{ github.run_id }}
@@ -263,9 +264,30 @@ jobs:
             bun-version.txt
           retention-days: 30
 
+      # 三种失败必须各自点名，不许合成一句「没有 artifact」：
+      #   ① 上传那步没给 id/digest —— 在这里红，并明确指向上传步骤；
+      #   ② 给了 id 却取不到 —— 由脚本按 id 取件，重试一次后原样打出 id 与状态码；
+      #   ③ 产物里没有 gates.flat.json —— 由上传前那一步单独红。
+      - name: the upload reported its artifact id and digest
+        if: always() && steps.live.outcome == 'success'
+        run: |
+          set -uo pipefail
+          id='${{ steps.live_upload.outputs.artifact-id }}'
+          digest='${{ steps.live_upload.outputs.artifact-digest }}'
+          echo "upload: artifact-id=$id digest=$digest"
+          if [ -z "$id" ]; then
+            echo "::error::the upload step reported no artifact id — the artifact was not uploaded, so the archive step would have nothing to bind to (this is the upload step's failure, not the archive's)"
+            exit 1
+          fi
+          if [ -z "$digest" ]; then
+            echo "::error::the upload step reported no artifact digest — the archive would have no fact about what bytes it is naming"
+            exit 1
+          fi
+
       # 归档序列只有一处定义：scripts/archive-live-run.sh。三个前置门的输入由脚本自己取
       # （git show HEAD:LICENSE、git log -p --all、--repo-json 指的那份），这里只给它
-      # 本次 run 的 API JSON 与产物目录。CI 用合成输入调同一个脚本，并证明它会红。
+      # 本次 run 的 API JSON、产物目录，以及上传那步报出的 artifact id 与 digest。
+      # 按 id 取件，不再读列表：那正是 15 毫秒竞态的入口。
       - name: archive this run (one script, stage 4)
         if: always() && steps.live.outcome == 'success'
         env:
@@ -276,15 +298,15 @@ jobs:
           auth=(-H "Authorization: Bearer $GITHUB_TOKEN" -H 'Accept: application/vnd.github+json')
           curl -sS "${auth[@]}" "$api/actions/runs/$GITHUB_RUN_ID" -o "$RUNNER_TEMP/run.json"
           curl -sS "${auth[@]}" "$api/actions/runs/$GITHUB_RUN_ID/jobs" -o "$RUNNER_TEMP/jobs.json"
-          curl -sS "${auth[@]}" "$api/actions/runs/$GITHUB_RUN_ID/artifacts" -o "$RUNNER_TEMP/artifacts.json"
           curl -sS "${auth[@]}" "$api" -o "$RUNNER_TEMP/repo.json"
           bash scripts/archive-live-run.sh \
             --dir "$RUNNER_TEMP" \
             --out "$RUNNER_TEMP/archive/gates.json" \
             --run-json "$RUNNER_TEMP/run.json" \
             --jobs-json "$RUNNER_TEMP/jobs.json" \
-            --artifacts-json "$RUNNER_TEMP/artifacts.json" \
             --repo-json "$RUNNER_TEMP/repo.json" \
+            --artifact-id "${{ steps.live_upload.outputs.artifact-id }}" \
+            --artifact-digest "${{ steps.live_upload.outputs.artifact-digest }}" \
             --product "$GATES_PRODUCT" | tee archive.txt
 
       - uses: actions/upload-artifact@v4

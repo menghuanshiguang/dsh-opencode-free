@@ -31,6 +31,11 @@ const contractsPath = arg('--contracts')
 const ciRunJsonPath = arg('--ci-run-json')
 const repoJsonPath2 = arg('--repo-json')
 const artifactsJsonPath = arg('--artifacts-json')
+// 归档哪一个 artifact：live 里由 upload-artifact 那步的 outputs 指定。
+// id 与 digest 都是 action 自己报的（上传完就有），不依赖列表端点的索引。
+const artifactId = arg('--artifact-id')
+const artifactDigest = arg('--artifact-digest')
+const artifactJsonPath = arg('--artifact-json')
 const negPath = arg('--negative-tests')
 const prePath = arg('--preconditions')
 const waiverPath = arg('--waiver')
@@ -41,7 +46,10 @@ const outPath = arg('--out')
 const stageArg = arg('--stage') ?? '0'
 if (!['0', '1', '2', '3', '4', '5'].includes(String(stageArg))) { console.error(`bad --stage ${stageArg}`); process.exit(2) }
 
-for (const [flag, value] of Object.entries({ '--dir': dir, '--run-json': runJsonPath, '--jobs-json': jobsJsonPath, '--lock': lockPath, '--negative-tests': negPath, '--artifacts-json': artifactsJsonPath, '--repo-json': repoJsonPath2, '--preconditions': prePath, '--out': outPath })) {
+// --artifacts-json 与 --artifact-id 二者之一即可：给了 id 就不再读列表（这正是竞态的入口）。
+const artifactInputs = { '--artifact-id': artifactId, '--artifacts-json': artifactsJsonPath }
+if (!artifactId && !artifactJsonPath && !artifactsJsonPath) { console.error('missing --artifact-id, --artifact-json or --artifacts-json'); process.exit(2) }
+for (const [flag, value] of Object.entries({ '--dir': dir, '--run-json': runJsonPath, '--jobs-json': jobsJsonPath, '--lock': lockPath, '--negative-tests': negPath, '--repo-json': repoJsonPath2, '--preconditions': prePath, '--out': outPath })) {
   if (!value) { console.error(`missing ${flag}`); process.exit(2) }
 }
 
@@ -52,9 +60,30 @@ const fail = message => { console.error(`FROM-ARTIFACT REFUSED: ${message}`); pr
 const run = readJson(runJsonPath)
 const repoDoc = repoJsonPath2 ? readJson(repoJsonPath2) : undefined
 if (repoDoc && repoDoc.full_name !== run.repository.full_name) fail('repo.json 与 run 不是同一个仓库')
-const artifactList = readJson(artifactsJsonPath).artifacts ?? []
-const artifact = artifactList.find(a => a.name.includes(String(run.id))) ?? artifactList[0]
-if (!artifact) fail('没有 artifact')
+// 选哪一个 artifact，两条路，不会互相兜底：
+//   --artifact-id 给了 → 只认这个 id 的单件响应（--artifact-json），列表一个字都不看。
+//                        取不到就 exit 1 点名；绝不回落到列表，回落等于把竞态藏起来。
+//   没给 id           → 才按列表找（夹具与人工复盘走这条）。
+let artifact
+if (artifactId !== undefined) {
+  if (!artifactJsonPath) fail(`--artifact-id ${artifactId} 给了，但没有 --artifact-json（这个 id 的单件响应）：不许回落到 artifacts 列表`)
+  if (!fs.existsSync(artifactJsonPath)) fail(`--artifact-id ${artifactId} 的单件响应文件不存在：${artifactJsonPath}`)
+  const one = readJson(artifactJsonPath)
+  if (String(one.id) !== String(artifactId)) fail(`单件响应的 id=${one.id} 与 --artifact-id ${artifactId} 不是同一件`)
+  if (artifactDigest !== undefined) {
+    const docDigest = String(one.digest ?? '').replace(/^sha256:/, '')
+    if (docDigest && docDigest !== artifactDigest) fail(`digest 不一致：上传那步报 ${artifactDigest}，API 报 ${docDigest}`)
+  }
+  artifact = { ...one, digest: artifactDigest !== undefined ? `sha256:${artifactDigest}` : one.digest }
+} else if (artifactJsonPath) {
+  // 单件响应、没有 id：夹具与人工复盘走这条。
+  if (!fs.existsSync(artifactJsonPath)) fail(`--artifact-json 指的文件不存在：${artifactJsonPath}`)
+  artifact = readJson(artifactJsonPath)
+} else {
+  const artifactList = readJson(artifactsJsonPath).artifacts ?? []
+  artifact = artifactList.find(a => a.name.includes(String(run.id))) ?? artifactList[0]
+  if (!artifact) fail('没有 artifact')
+}
 const jobs = readJson(jobsJsonPath).jobs ?? []
 const live = readJson(path.join(dir, 'live.json'))
 // 规范名是 gates.flat.json（gates.json 留给要归档的那份，job 内不再造同名拷贝）。
@@ -213,6 +242,10 @@ const record = {
   },
   gates: gateEntries,
   artifacts: [{
+    // id 与 sha256 都来自上传那一步的事实（upload-artifact 的 outputs / 该 id 的单件响应），
+    // 档案因此能钉在「就是这一件」上，不必再回列表里猜哪一条是它。
+    // 有 id 才写：live 里它来自上传那步，夹具的列表路径没有这一项，不加空字段去动已验证的夹具字节。
+    ...(artifact.id !== undefined && artifact.id !== null ? { id: artifact.id } : {}),
     name: artifact.name,
     kind: 'log',
     url: run.html_url,

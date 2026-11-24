@@ -473,6 +473,13 @@
           "retentionDays": {
             "type": "integer",
             "minimum": 30
+          },
+          "id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "upload-artifact 那一步报出的 id（事实，不是从列表里捞的）；旧档案没有这一项时为空"
           }
         }
       }
