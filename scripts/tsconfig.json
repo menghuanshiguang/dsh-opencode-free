@@ -21,6 +21,7 @@
     "../src/egress.js",
     "../src/store.js",
     "./check-extraction.mjs",
-    "./tests/*.mjs"
+    "./tests/*.mjs",
+    "./live-test.mjs"
   ]
 }

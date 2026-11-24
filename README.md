@@ -74,7 +74,14 @@ when all four families hold:
 Exit codes: `0` pass, `1` fail (each hit listed), `2` the checker itself could
 not run. Treating only `1` as failure would let a broken run look green.
 
-`npm test` runs the two offline suites. `npm run typecheck` checks the files
+`npm test` runs the three offline suites: the contract hash, the route surface,
+and the stand-in contract (a loopback server that records the outbound body, so
+"the gateway adds nothing" is asserted as a sha256 equality rather than promised).
+
+`node scripts/live-test.mjs` without `--live` prints
+`Skipped: pass --live to send an actual request.` and sends nothing; CI runs it
+exactly that way, under the network guard, and counts the off-loopback attempts
+(it expects 0). `npm run typecheck` checks the files
 this package authored (they carry `// @ts-check`); the four upstream files are
 covered by their pinned blob shas instead of being re-typed, because editing
 them to satisfy a checker would change the fingerprint this lane depends on.

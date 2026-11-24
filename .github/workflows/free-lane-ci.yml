@@ -208,6 +208,33 @@ jobs:
       - name: npm run typecheck
         run: npm run typecheck
 
+      - name: contract tests, with every off-loopback request refused
+        # The guard is a preload that throws on any off-loopback fetch and on any
+        # attempt to start the Bun worker. NODE_OPTIONS carries it into the child
+        # process the test runner spawns per file, so the assertion is about the
+        # bytes a test would actually send, not about the parent process.
+        run: |
+          set -euo pipefail
+          G="$GITHUB_WORKSPACE/tools/guard-offline.mjs"
+          NODE_OPTIONS="--import $G" node --test scripts/tests/*.test.mjs 2>&1 | tee contract-guard.txt
+          grep -q 'no off-loopback request was attempted' contract-guard.txt
+          if grep -q 'BLOCKED fetch' contract-guard.txt; then echo "::error::a test tried to reach the network"; exit 1; fi
+
+      - name: the live script sends nothing without --live
+        run: |
+          set -euo pipefail
+          G="$GITHUB_WORKSPACE/tools/guard-offline.mjs"
+          NODE_OPTIONS="--import $G" node scripts/live-test.mjs 2>&1 | tee live-skip.txt
+          grep -q '^Skipped: pass --live to send an actual request\.$' live-skip.txt
+          grep -q 'no off-loopback request was attempted' live-skip.txt
+
+      - name: zero /inference requests during CI (counted, not claimed)
+        run: |
+          set -euo pipefail
+          count=$(cat contract-guard.txt live-skip.txt | grep -c 'BLOCKED fetch' || true)
+          echo "off-loopback fetch attempts during CI: $count" | tee off-loopback.txt
+          test "$count" -eq 0
+
       - name: acceptance — year clock, today
         run: node acceptance/year-clock-test.mjs | tee year-clock-today.txt
 

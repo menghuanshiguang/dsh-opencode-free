@@ -19,7 +19,7 @@
 import { createServer } from 'node:http'
 
 import { CODE, getJson, postStreamed } from './http.js'
-import { applyFingerprint, endpointFor, sessionForConversation, truncateSession } from './upstream.js'
+import { applyFingerprint, endpointFor, restoreToolName, sessionForConversation, truncateSession } from './upstream.js'
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024
 const DEFAULT_HOST = '127.0.0.1'
@@ -109,7 +109,9 @@ export function createGateway(options = {}) {
       const listing = await lane.models({ session })
       const rows = Array.isArray(listing?.data) ? listing.data : []
       const free = rows.filter(row => isFreeLaneModel(row?.id))
-      sendJson(res, 200, { object: 'list', data: free })
+      // The count is what this request observed in the upstream listing, carried
+      // out of the process so no artifact has to hard-code a number.
+      sendJson(res, 200, { object: 'list', data: free }, { 'x-free-lane-models': String(free.length) })
     } catch (error) {
       upstreamFailure(res, error)
     }
@@ -134,7 +136,9 @@ export function createGateway(options = {}) {
     // The lane's own wire is a stream; a caller asking for one object gets it
     // aggregated below, not by asking the upstream for a different shape.
     payload.stream = true
-    applyFingerprint(payload, false)
+    // The rename map is the only thing the gateway may use to touch the response:
+    // the caller's tool spellings have to come back, and nothing else is changed.
+    const renames = applyFingerprint(payload, false)
     const session = sessionFor(req)
     const wantsStream = body.stream === true
     const created = Math.floor(Date.now() / 1000)
@@ -144,14 +148,37 @@ export function createGateway(options = {}) {
     let usage
     let finish = null
     let wrote = false
+    /** Tool calls aggregated for the non-streaming answer, keyed by their index. */
+    const calls = new Map()
+    const restore = name => restoreToolName(name, renames)
+    /** Put the caller's tool spelling back on every name the model returned. */
+    const restoreChunk = chunk => {
+      const choice = chunk?.choices?.[0]
+      for (const call of choice?.delta?.tool_calls ?? choice?.message?.tool_calls ?? []) {
+        const name = call?.function?.name
+        if (typeof name === 'string' && name !== '') call.function.name = restore(name)
+      }
+      const legacy = choice?.delta?.function_call
+      if (legacy && typeof legacy.name === 'string' && legacy.name !== '') legacy.name = restore(legacy.name)
+      return chunk
+    }
     const onData = raw => {
       if (raw === '[DONE]') return
       let chunk
       try { chunk = JSON.parse(raw) } catch { return }
       const choice = chunk?.choices?.[0]
       if (typeof choice?.delta?.content === 'string') text += choice.delta.content
+      for (const call of choice?.delta?.tool_calls ?? []) {
+        const index = call?.index ?? 0
+        const held = calls.get(index) ?? { id: undefined, type: 'function', function: { name: '', arguments: '' } }
+        if (typeof call?.id === 'string') held.id = call.id
+        if (typeof call?.function?.name === 'string' && call.function.name !== '') held.function.name = call.function.name
+        if (typeof call?.function?.arguments === 'string') held.function.arguments += call.function.arguments
+        calls.set(index, held)
+      }
       if (choice?.finish_reason) finish = choice.finish_reason
       if (chunk?.usage) usage = chunk.usage
+      restoreChunk(chunk)
       if (wantsStream) {
         if (!wrote) {
           res.writeHead(200, {
@@ -188,7 +215,17 @@ export function createGateway(options = {}) {
       object: 'chat.completion',
       created,
       model: body.model,
-      choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: finish ?? 'stop' }],
+      choices: [{
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: calls.size > 0 ? null : text,
+          ...(calls.size > 0
+            ? { tool_calls: [...calls.values()].map((call, index) => ({ id: call.id ?? `call_${index}`, type: 'function', function: { name: restore(call.function.name), arguments: call.function.arguments } })) }
+            : {}),
+        },
+        finish_reason: finish ?? (calls.size > 0 ? 'tool_calls' : 'stop'),
+      }],
       usage: usage ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
     })
   }
