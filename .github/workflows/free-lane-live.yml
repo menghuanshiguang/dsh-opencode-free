@@ -228,6 +228,47 @@ jobs:
           echo "rehearsal: both reporters ran; the only failures are the ones a zero-request run must produce"
           exit 0
 
+      # The archive has to be built AFTER the raw artifact exists (its `artifacts`
+      # section lists what this run uploaded), and it has to be built by the tool
+      # the verifier trusts: gates/from-artifact.mjs, stage 4. The schema and the
+      # validator are untouched — stage 4 legitimately reuses the 0.x gate family.
+      - name: archive this run (schema shape, stage 4)
+        if: always() && steps.live.outcome == 'success'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY"
+          auth=(-H "Authorization: Bearer $GITHUB_TOKEN" -H 'Accept: application/vnd.github+json')
+          curl -sS "${auth[@]}" "$api/actions/runs/$GITHUB_RUN_ID" -o "$RUNNER_TEMP/run.json"
+          curl -sS "${auth[@]}" "$api/actions/runs/$GITHUB_RUN_ID/jobs" -o "$RUNNER_TEMP/jobs.json"
+          curl -sS "${auth[@]}" "$api/actions/runs/$GITHUB_RUN_ID/artifacts" -o "$RUNNER_TEMP/artifacts.json"
+          curl -sS "${auth[@]}" "$api" -o "$RUNNER_TEMP/repo.json"
+          node gates/selftest.mjs --json > "$RUNNER_TEMP/negative-tests.json"
+          node gates/check-preconditions.mjs --json > "$RUNNER_TEMP/preconditions.json"
+          mkdir -p "$RUNNER_TEMP/archive"
+          node gates/from-artifact.mjs \
+            --dir "$RUNNER_TEMP" \
+            --run-json "$RUNNER_TEMP/run.json" \
+            --jobs-json "$RUNNER_TEMP/jobs.json" \
+            --artifacts-json "$RUNNER_TEMP/artifacts.json" \
+            --repo-json "$RUNNER_TEMP/repo.json" \
+            --lock docs/fingerprint-baseline.json \
+            --contracts upstream/src/o2a/assets/ofm-tool-contracts.json \
+            --preconditions "$RUNNER_TEMP/preconditions.json" \
+            --negative-tests "$RUNNER_TEMP/negative-tests.json" \
+            --stage 4 \
+            --out "$RUNNER_TEMP/archive/gates.json" | tee archive.txt
+          node gates/validate.mjs "$RUNNER_TEMP/archive/gates.json" --stage 4 | tee -a archive.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.live.outcome == 'success'
+        with:
+          name: archive-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/archive/gates.json
+            archive.txt
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
