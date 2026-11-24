@@ -178,6 +178,13 @@ jobs:
           cp tools/gh-anon-shim.mjs "$RUNNER_TEMP/bin/gh"
           chmod +x "$RUNNER_TEMP/bin/gh"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          # The next step runs in a fresh shell, so this is the one place the
+          # resolution can be checked before the fetch: if PATH did not take, the
+          # runner's real `gh` would fetch with a token and this step would still
+          # look green. 验收员's audit item A4.
+          resolved=$(bash -lc 'command -v gh')
+          echo "gh resolves to $resolved"
+          test "$resolved" = "$RUNNER_TEMP/bin/gh" || { echo "::error::gh resolves to $resolved, not the anonymous shim at $RUNNER_TEMP/bin/gh"; exit 1; }
 
       - name: fetch the pinned sources anonymously
         run: |
@@ -185,6 +192,34 @@ jobs:
           export OFM_ASSET_LOG="$RUNNER_TEMP/asset-log.jsonl"
           cd upstream
           node scripts/fetch-opencode-assets.mjs --force
+
+      - name: the fetch was anonymous (URLs from the log, headers from the shim)
+        env:
+          OFM_ASSET_LOG: ${{ runner.temp }}/asset-log.jsonl
+        run: |
+          set -euo pipefail
+          test -s "$OFM_ASSET_LOG" || { echo "::error::no asset log at $OFM_ASSET_LOG — anonymity cannot be shown"; exit 1; }
+          node -e '
+            const { readFileSync } = require("node:fs")
+            const lines = readFileSync(process.env.OFM_ASSET_LOG, "utf8").split("\n").filter(Boolean)
+            const entries = lines.map(line => { try { return JSON.parse(line) } catch { return null } })
+            if (entries.includes(null)) { console.error("::error::asset log has a line that is not JSON"); process.exit(1) }
+            if (entries.length === 0) { console.error("::error::asset log is empty"); process.exit(1) }
+            const badURL = entries.filter(entry => !/^https:\/\/raw\.githubusercontent\.com\//.test(String(entry.url ?? "")))
+            const notOK = entries.filter(entry => entry.ok !== true)
+            const withAuth = entries.filter(entry => /authorization/i.test(JSON.stringify(entry)))
+            if (badURL.length) { console.error(`::error::${badURL.length} fetch(es) were not from raw.githubusercontent.com: ${badURL.slice(0, 3).map(e => e.url).join(", ")}`); process.exit(1) }
+            if (notOK.length) { console.error(`::error::${notOK.length} fetch(es) did not succeed`); process.exit(1) }
+            if (withAuth.length) { console.error(`::error::${withAuth.length} log record(s) carry an Authorization marker`); process.exit(1) }
+            console.log(`anonymous fetch proven: ${entries.length} request(s), all raw.githubusercontent.com, no authorization marker in any record`)
+          '
+          # The headers live in the shim, not in its log, so the header claim is
+          # asserted where it is written: the shim must send no credential header.
+          if grep -qi 'authorization' tools/gh-anon-shim.mjs; then
+            echo "::error::the anonymous shim mentions an Authorization header"
+            exit 1
+          fi
+          echo "shim source carries no authorization header"
 
       - name: documented blob SHAs must match
         env:
@@ -200,7 +235,9 @@ jobs:
           node scripts/build-o2a-assets.mjs
           git diff --stat
           git diff --exit-code -- src/o2a/assets
-          echo "assets rebuilt byte-identically from the anonymous sources"
+          # The anonymity half is asserted by the step above, from the shim's own
+          # log; this echo names only what this step proves.
+          echo "assets rebuilt byte-identically (source anonymity asserted in the fetch step)"
 
       - uses: actions/upload-artifact@v4
         if: always()

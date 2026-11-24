@@ -130,98 +130,6 @@ export function buildGates({ fields = null, live = null, wire = { requests: 0, b
   }
 }
 
-/**
- * The same run in the archive's shape (gates.schema.json).
- *
- * A rehearsal has no live answer and no preconditions scan, so the fields that
- * depend on them stay null — the point of this projection is the three things
- * gates/check-rehearsal.mjs judges: `request.postCount`, `request.retried`, and
- * the set of gate ids that failed. It is built from the record above, so it can
- * never disagree with it.
- */
-export function archiveFrom(gates, { stage = '4', fields = null, egress = {}, env = {}, producedBy = 'tools/gates.mjs' } = {}) {
-  const groups = new Map()
-  for (const [name, entry] of Object.entries(gates.checks ?? {})) {
-    const id = String(name).split('-')[0]
-    const held = groups.get(id) ?? { id, pass: true, evidence: [] }
-    held.pass = held.pass && entry.pass === true
-    held.evidence.push(`${name}: ${entry.pass === true ? 'pass' : 'FAIL'}${entry.detail === undefined ? '' : ` — ${typeof entry.detail === 'string' ? entry.detail : JSON.stringify(entry.detail)}`}`)
-    groups.set(id, held)
-  }
-  const gateList = [...groups.values()].map(group => ({ id: group.id, pass: group.pass, evidence: group.evidence.join('; ') }))
-  const failed = gateList.filter(group => !group.pass).map(group => group.id)
-  return {
-    schemaVersion: 1,
-    stage: String(stage),
-    run: {
-      id: env.GITHUB_RUN_ID ?? null,
-      url: gates.run?.url ?? null,
-      workflow: env.GITHUB_WORKFLOW ?? null,
-      event: env.GITHUB_EVENT_NAME ?? null,
-      conclusion: null,
-      attempt: env.GITHUB_RUN_ATTEMPT ?? null,
-      createdAt: gates.generatedAt,
-      headSha: env.GITHUB_SHA ?? null,
-      liveStepOutcome: gates.ok === true ? 'success' : 'no request',
-      failedSteps: [],
-    },
-    repo: {
-      fullName: env.GITHUB_REPOSITORY ?? null,
-      visibility: null,
-      commit: { sha: env.GITHUB_SHA ?? null, branch: env.GITHUB_REF_NAME ?? null },
-    },
-    env: {
-      runner: gates.runtime?.platform ?? null,
-      runtime: 'bun',
-      bunVersion: gates.runtime?.bunVersion ?? null,
-      transport: gates.runtime?.transport ?? null,
-      transportOverride: (gates.runtime?.transportEnv ?? '') !== '',
-      transportBasis: gates.runtime?.transportBasis ?? 'derived',
-      transportEvidence: gates.runtime?.transportBasis === 'observed'
-        ? `${gates.runtime.transportObserved?.implementation} pid=${gates.runtime.transportObserved?.pid} version=${gates.runtime.transportObserved?.version}`
-        : 'no observation in this product',
-      transportObserved: gates.runtime?.transportObserved ?? null,
-      os: gates.runtime?.platform ?? null,
-    },
-    egress: { ip: egress?.egressIp ?? gates.egressIp ?? null, country: egress?.country ?? gates.country ?? null, source: 'egress.env written before the request', colo: gates.colo ?? null },
-    request: {
-      model: gates.model ?? null,
-      postCount: gates.postCount ?? 0,
-      retried: gates.retried ?? false,
-      endpoint: gates.endpoint ?? null,
-      ua: gates.userAgent ?? null,
-    },
-    fingerprint: {
-      toolCount: gates.toolCount ?? null,
-      toolOrder: gates.toolNames ?? null,
-      toolsSha256: gates.toolsSha256 ?? null,
-      expectedToolsSha256: fields?.toolsSha256 ?? null,
-      systemBytes: gates.systemPromptBytes ?? null,
-      systemSha256: gates.systemPromptSha256 ?? null,
-      platform: fields?.platform ?? gates.runtime?.platform ?? null,
-      shellDescPrefix: fields?.shellDescriptionPrefix ?? null,
-    },
-    response: {
-      status: gates.status ?? null,
-      ok: gates.ok ?? null,
-      reply: gates.reply ?? null,
-      billingSource: gates.billingSource ?? null,
-      elapsedMs: gates.elapsedMs ?? null,
-    },
-    assets: {
-      tag: fields?.assetsTag ?? null,
-      provenance: fields?.assetsProvenance ?? null,
-      lockSha256: fields?.assetsLockSha256 ?? null,
-      contractsSha256: fields?.contractsSha256 ?? null,
-    },
-    gates: gateList,
-    artifacts: [],
-    verdict: { pass: failed.length === 0, failed },
-    negativeTests: [],
-    producedBy: { bot: producedBy, at: gates.generatedAt },
-  }
-}
-
 /** Read the run's files off disk and build the record. */
 export function readGatesInputs({ fieldsPath, livePath, egressPath, wireDir, lockPath }) {
   const readJson = path => { try { return path && existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null } catch { return null } }
@@ -253,10 +161,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (out) writeFileSync(out, `${text}\n`)
   // The archive projection is what a rehearsal is judged on and what an artifact
   // should carry; the flat record above stays the input the archive tool reads.
-  const archiveOut = value('--archive')
-  if (archiveOut) {
-    writeFileSync(archiveOut, `${JSON.stringify(archiveFrom(gates, { stage: value('--stage') ?? '4', fields: inputs.fields, egress: inputs.egress, env: inputs.env }), null, 2)}\n`)
-  }
   if (!gates.passed) {
     const failed = Object.entries(gates.checks).filter(([, entry]) => !entry.pass).map(([name]) => name)
     console.error(`\nGATES: FAIL (${failed.length}) — ${failed.join(', ')}`)

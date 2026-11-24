@@ -187,7 +187,11 @@ jobs:
             --live "$RUNNER_TEMP/live.json" \
             --egress "$RUNNER_TEMP/egress.env" \
             --wire "$RUNNER_TEMP/wire" \
-            --out "$RUNNER_TEMP/gates.json" | tee "$RUNNER_TEMP/gates.txt"
+            --out "$RUNNER_TEMP/gates.flat.json" | tee "$RUNNER_TEMP/gates.txt"
+          # `gates.json` is the archive's name (built later in this run). The archive
+          # tool still reads its input under the old name, so the product is copied
+          # once under it until that tool reads gates.flat.json.
+          cp "$RUNNER_TEMP/gates.flat.json" "$RUNNER_TEMP/gates.json"
 
       - name: rehearsal — the reporting path runs and fails only where designed
         if: inputs.dry_run == 'true'
@@ -213,11 +217,11 @@ jobs:
           # the document for text.
           node tools/gates.mjs --fields "$RUNNER_TEMP/fields.json" --live "$RUNNER_TEMP/live.json" \
             --egress "$RUNNER_TEMP/egress.env" --wire "$RUNNER_TEMP/wire" \
-            --out "$RUNNER_TEMP/gates.flat.json" --archive "$RUNNER_TEMP/gates.json" --stage 4 > "$RUNNER_TEMP/rehearsal-gates.txt" 2>&1
+            --out "$RUNNER_TEMP/gates.flat.json" > "$RUNNER_TEMP/rehearsal-gates.txt" 2>&1
           rc_gates=$?
           cat "$RUNNER_TEMP/rehearsal-gates.txt"
           test "$rc_gates" -eq 1 || { echo "::error::gates must fail a zero-request run with exit 1, got $rc_gates"; exit 1; }
-          node gates/check-rehearsal.mjs "$RUNNER_TEMP/gates.json" | tee "$RUNNER_TEMP/rehearsal-check.txt"
+          node gates/check-rehearsal.mjs "$RUNNER_TEMP/gates.flat.json" --shape flat | tee "$RUNNER_TEMP/rehearsal-check.txt"
           exit 0
 
       # The archive has to be built AFTER the raw artifact exists (its `artifacts`
@@ -251,7 +255,11 @@ jobs:
             --negative-tests "$RUNNER_TEMP/negative-tests.json" \
             --stage 4 \
             --out "$RUNNER_TEMP/archive/gates.json" | tee archive.txt
-          node gates/validate.mjs "$RUNNER_TEMP/archive/gates.json" --stage 4 | tee -a archive.txt
+          # --lock is not optional: without it the lock leg of the fingerprint ring
+          # never runs, so a product whose live and expected hashes agree while both
+          # drifted from the committed lock would pass. 督查's condition 7.
+          node gates/validate.mjs "$RUNNER_TEMP/archive/gates.json" --stage 4 \
+            --lock docs/fingerprint-baseline.json | tee -a archive.txt
 
       - uses: actions/upload-artifact@v4
         if: always() && steps.live.outcome == 'success'
