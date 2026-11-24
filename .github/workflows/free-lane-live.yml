@@ -206,26 +206,18 @@ jobs:
           test "$rc_report" -eq 1 || { echo "::error::report-wire should refuse an empty capture with exit 1, got $rc_report"; exit 1; }
           grep -q 'no wire capture' "$RUNNER_TEMP/rehearsal-report.txt" || { echo "::error::report-wire did not name the missing capture"; exit 1; }
 
+          # The rehearsal product is written in the archive's shape (the same
+          # projection the artifact will carry), and judged by parsing it: the
+          # failing set must be exactly 0.3, 0.5, 0.6, 0.7, 0.9 — not "0.3 failed
+          # and postCount is 0" with the rest unexamined, and never by grepping
+          # the document for text.
           node tools/gates.mjs --fields "$RUNNER_TEMP/fields.json" --live "$RUNNER_TEMP/live.json" \
-            --egress "$RUNNER_TEMP/egress.env" --wire "$RUNNER_TEMP/wire" --out "$RUNNER_TEMP/gates.json" > "$RUNNER_TEMP/rehearsal-gates.txt" 2>&1
+            --egress "$RUNNER_TEMP/egress.env" --wire "$RUNNER_TEMP/wire" \
+            --out "$RUNNER_TEMP/gates.flat.json" --archive "$RUNNER_TEMP/gates.json" --stage 4 > "$RUNNER_TEMP/rehearsal-gates.txt" 2>&1
           rc_gates=$?
           cat "$RUNNER_TEMP/rehearsal-gates.txt"
           test "$rc_gates" -eq 1 || { echo "::error::gates must fail a zero-request run with exit 1, got $rc_gates"; exit 1; }
-          # Parsed, not grepped: a text match on `"postCount": 0` finds the string
-          # anywhere in the document (and finds nothing at all once the product
-          # gains a `request` section). The rehearsal asserts the values.
-          node -e '
-            const { readFileSync } = require("node:fs")
-            const doc = JSON.parse(readFileSync(process.argv[1], "utf8"))
-            const count = doc?.request?.postCount ?? doc?.postCount
-            if (count !== 0) { console.error(`::error::gates.json records postCount ${JSON.stringify(count)}, not the number 0`); process.exit(1) }
-            const check = doc?.gates?.find?.(entry => entry.id === "0.3") ?? doc?.checks?.["0.3-transport-bun"]
-            const failed = doc?.checks?.["0.3-transport-bun"]?.pass === false
-              || (Array.isArray(doc?.gates) && check && check.pass === false)
-            if (!failed) { console.error("::error::0.3 did not fail on a zero-request run"); process.exit(1) }
-            console.log(`rehearsal parsed: request.postCount = ${count}; 0.3 failed as designed`)
-          ' "$RUNNER_TEMP/gates.json"
-          echo "rehearsal: both reporters ran; the only failures are the ones a zero-request run must produce"
+          node gates/check-rehearsal.mjs "$RUNNER_TEMP/gates.json" | tee "$RUNNER_TEMP/rehearsal-check.txt"
           exit 0
 
       # The archive has to be built AFTER the raw artifact exists (its `artifacts`
