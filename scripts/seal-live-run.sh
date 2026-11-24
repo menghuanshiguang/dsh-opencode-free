@@ -95,8 +95,37 @@ process.stdout.write(`${a.id}\n${String(a.digest ?? "").replace(/^sha256:/, "")}
   echo "sealed inputs: run=$runid conclusion=$conclusion artifact id=$aid digest=$adigest name=$aname"
 fi
 
+# ---- 产物在哪一层：下探到含 live.json 的那一层，不写死目录名 ----
+#
+# upload-artifact 解出来的结构不是接口，是当次运行的产物：真件的内容落在
+# <artifact>/_temp/ 下，而 `_temp` 是 runner 的临时目录名——把它写进脚本，等于
+# 把某个平台某一天偶然成立的结构当成契约，换一次 runner 版本就静默错位。
+# 反过来，指高了也不行：归档会报「缺 live.json」，而那看起来和「产物真缺文件」
+# 一模一样（验收员 2026-11-24 实证：扁夹具与真件都 rc=2、都报「缺」）。
+#
+# 所以下探，但下探必须有界：深度 ≤3，且必须唯一命中。0 层或 2 层以上都拒，
+# 不挑第一个——今天所有的错都出在「在列表里挑一个」。
+payload=$dir
+layers=$(cd "$payload" 2>/dev/null && find . -maxdepth 3 -type f -name live.json 2>/dev/null |
+  sed 's#^\./##; s#/live\.json$##; s#^live\.json$#.#' | sort)
+found=$(printf '%s' "$layers" | grep -c . || true)
+if [ "$found" -eq 0 ]; then
+  die 1 "解包后在 $payload 深度 ≤3 以内找不到 live.json：产物不完整，或层级超过有界深度——不猜、不退化"
+fi
+if [ "$found" -gt 1 ]; then
+  die 1 "解包后有 $found 层都含 live.json（$(printf '%s' "$layers" | tr '\n' ' ')）：必须唯一命中，不挑第一个"
+fi
+if [ "$layers" = "." ]; then
+  payload=$dir
+else
+  payload=$dir/$layers
+fi
+[ -f "$payload/live.json" ] || die 1 "下探到 $payload 但那里没有 live.json，脚本自己算错了层级"
+rel=${payload#"$dir"}; rel=${rel#/}; [ -n "$rel" ] || rel="(top)"
+echo "sealed payload layer: $rel (live.json, depth ≤3, unique)"
+
 bash scripts/archive-live-run.sh \
-  --dir "$dir" \
+  --dir "$payload" \
   --out "$out/gates.json" \
   --run-json "$runjson" \
   --jobs-json "$jobsjson" \
